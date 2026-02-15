@@ -28,23 +28,11 @@
     "type_group": "MIXED",
     "items": [
       {
-        "name": "잎채소",
+        "name": "채소",
         "item_type": "RAW_PRODUCE"
       },
       {
-        "name": "줄기채소",
-        "item_type": "RAW_PRODUCE"
-      },
-      {
-        "name": "뿌리채소",
-        "item_type": "RAW_PRODUCE"
-      },
-      {
-        "name": "고추/호박",
-        "item_type": "RAW_PRODUCE"
-      },
-      {
-        "name": "버섯류",
+        "name": "버섯",
         "item_type": "RAW_PRODUCE"
       },
       {
