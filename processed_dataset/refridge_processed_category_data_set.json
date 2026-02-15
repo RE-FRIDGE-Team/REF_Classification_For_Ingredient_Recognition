@@ -7,18 +7,6 @@
         "item_type": "ALCOHOL"
       },
       {
-        "name": "위스키",
-        "item_type": "ALCOHOL"
-      },
-      {
-        "name": "데낄라",
-        "item_type": "ALCOHOL"
-      },
-      {
-        "name": "보드카",
-        "item_type": "ALCOHOL"
-      },
-      {
         "name": "전통주",
         "item_type": "ALCOHOL"
       },
@@ -31,11 +19,7 @@
         "item_type": "ALCOHOL"
       },
       {
-        "name": "사케",
-        "item_type": "ALCOHOL"
-      },
-      {
-        "name": "리큐르",
+        "name": "기타 주류",
         "item_type": "ALCOHOL"
       }
     ]
