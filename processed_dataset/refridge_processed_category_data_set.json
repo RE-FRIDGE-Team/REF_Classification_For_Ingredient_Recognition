@@ -1,0 +1,334 @@
+{
+  "술": {
+    "type_group": "ALCOHOL",
+    "items": [
+      {
+        "name": "와인",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "위스키",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "데낄라",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "보드카",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "전통주",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "맥주",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "소주",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "사케",
+        "item_type": "ALCOHOL"
+      },
+      {
+        "name": "리큐르",
+        "item_type": "ALCOHOL"
+      }
+    ]
+  },
+  "채소/곡물류": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "잎채소",
+        "item_type": "RAW_PRODUCE"
+      },
+      {
+        "name": "줄기채소",
+        "item_type": "RAW_PRODUCE"
+      },
+      {
+        "name": "뿌리채소",
+        "item_type": "RAW_PRODUCE"
+      },
+      {
+        "name": "고추/호박",
+        "item_type": "RAW_PRODUCE"
+      },
+      {
+        "name": "버섯류",
+        "item_type": "RAW_PRODUCE"
+      },
+      {
+        "name": "냉동채소",
+        "item_type": "SIMPLE_PROCESSED"
+      },
+      {
+        "name": "쌀/잡곡",
+        "item_type": "GRAIN"
+      },
+      {
+        "name": "콩/두부",
+        "item_type": "SIMPLE_PROCESSED"
+      }
+    ]
+  },
+  "육류": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "소고기",
+        "item_type": "RAW_MEAT"
+      },
+      {
+        "name": "돼지고기",
+        "item_type": "RAW_MEAT"
+      },
+      {
+        "name": "닭고기",
+        "item_type": "RAW_MEAT"
+      },
+      {
+        "name": "오리고기",
+        "item_type": "RAW_MEAT"
+      },
+      {
+        "name": "계란",
+        "item_type": "RAW_MEAT"
+      },
+      {
+        "name": "가공육(햄/소시지)",
+        "item_type": "PROCESSED_MEAT"
+      }
+    ]
+  },
+  "수산물": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "생선",
+        "item_type": "RAW_SEAFOOD"
+      },
+      {
+        "name": "조개/전복",
+        "item_type": "RAW_SEAFOOD"
+      },
+      {
+        "name": "새우/게",
+        "item_type": "RAW_SEAFOOD"
+      },
+      {
+        "name": "멸치/건어물",
+        "item_type": "DRIED_SEAFOOD"
+      },
+      {
+        "name": "오징어/문어",
+        "item_type": "RAW_SEAFOOD"
+      },
+      {
+        "name": "미역/다시마",
+        "item_type": "DRIED_SEAFOOD"
+      }
+    ]
+  },
+  "과일류": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "봄과일",
+        "item_type": "RAW_FRUIT"
+      },
+      {
+        "name": "여름과일",
+        "item_type": "RAW_FRUIT"
+      },
+      {
+        "name": "가을과일",
+        "item_type": "RAW_FRUIT"
+      },
+      {
+        "name": "겨울과일",
+        "item_type": "RAW_FRUIT"
+      },
+      {
+        "name": "견과류",
+        "item_type": "RAW_FRUIT"
+      },
+      {
+        "name": "수입과일",
+        "item_type": "RAW_FRUIT"
+      },
+      {
+        "name": "냉동과일",
+        "item_type": "SIMPLE_PROCESSED"
+      }
+    ]
+  },
+  "간편식": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "밀키트",
+        "item_type": "RTC_MEAL"
+      },
+      {
+        "name": "레토르트",
+        "item_type": "RTC_MEAL"
+      },
+      {
+        "name": "즉석밥",
+        "item_type": "INSTANT"
+      },
+      {
+        "name": "라면",
+        "item_type": "INSTANT"
+      },
+      {
+        "name": "냉동식품",
+        "item_type": "FROZEN_MEAL"
+      },
+      {
+        "name": "샐러드팩",
+        "item_type": "RTC_MEAL"
+      }
+    ]
+  },
+  "조미료": {
+    "type_group": "SAUCE_SEASONING",
+    "items": [
+      {
+        "name": "식용유/기름",
+        "item_type": "SAUCE_SEASONING"
+      },
+      {
+        "name": "양념/소스",
+        "item_type": "SAUCE_SEASONING"
+      },
+      {
+        "name": "조미료",
+        "item_type": "SAUCE_SEASONING"
+      },
+      {
+        "name": "가루분말",
+        "item_type": "GRAIN"
+      },
+      {
+        "name": "향신료/허브",
+        "item_type": "SAUCE_SEASONING"
+      }
+    ]
+  },
+  "음료": {
+    "type_group": "BEVERAGE",
+    "items": [
+      {
+        "name": "탄산음료",
+        "item_type": "BEVERAGE"
+      },
+      {
+        "name": "이온음료",
+        "item_type": "BEVERAGE"
+      },
+      {
+        "name": "주스",
+        "item_type": "BEVERAGE"
+      },
+      {
+        "name": "커피/차",
+        "item_type": "BEVERAGE"
+      },
+      {
+        "name": "생수",
+        "item_type": "BEVERAGE"
+      },
+      {
+        "name": "에너지드링크",
+        "item_type": "BEVERAGE"
+      }
+    ]
+  },
+  "유제품": {
+    "type_group": "DAIRY",
+    "items": [
+      {
+        "name": "우유/두유",
+        "item_type": "DAIRY"
+      },
+      {
+        "name": "요거트",
+        "item_type": "DAIRY"
+      },
+      {
+        "name": "치즈",
+        "item_type": "DAIRY"
+      },
+      {
+        "name": "버터/생크림",
+        "item_type": "DAIRY"
+      }
+    ]
+  },
+  "베이커리": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "빵류",
+        "item_type": "BAKERY"
+      },
+      {
+        "name": "디저트/케이크",
+        "item_type": "BAKERY"
+      },
+      {
+        "name": "과자/스낵",
+        "item_type": "SNACK"
+      },
+      {
+        "name": "초콜릿/사탕",
+        "item_type": "SNACK"
+      }
+    ]
+  },
+  "저장식품": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "참치/스팸캔",
+        "item_type": "CANNED"
+      },
+      {
+        "name": "김/자반",
+        "item_type": "DRIED_SEAFOOD"
+      },
+      {
+        "name": "잼/스프레드",
+        "item_type": "SAUCE_SEASONING"
+      },
+      {
+        "name": "시리얼",
+        "item_type": "GRAIN"
+      }
+    ]
+  },
+  "기타": {
+    "type_group": "MIXED",
+    "items": [
+      {
+        "name": "영양제",
+        "item_type": "SUPPLEMENT"
+      },
+      {
+        "name": "반려동물 식품",
+        "item_type": "ETC"
+      },
+      {
+        "name": "한약/건강즙",
+        "item_type": "SUPPLEMENT"
+      }
+    ]
+  }
+}
