@@ -1,0 +1,36 @@
+1. RAW_PRODUCE - 비가공 농산물
+2. RAW_MEAT - 비가공 육류
+3. RAW_SEAFOOD - 비가공 수산물
+4. RAW_FRUIT - 비가공 과일
+
+5. SIMPLE_PROCESSED - 단순 가공품 (두부, 냉동채소 등)
+6. PROCESSED_MEAT - 가공 육가공품 (햄, 소시지)
+7. DRIED_SEAFOOD - 건어물/건조 수산물
+
+8. SAUCE_SEASONING - 소스/양념류
+9. BEVERAGE - 음료류
+10. DAIRY - 유제품
+11. BAKERY - 베이커리/제과
+
+12. RTC_MEAL - 즉석조리식품 (레토르트, 밀키트)
+13. FROZEN_MEAL - 냉동 완제품
+14. INSTANT - 즉석식품 (라면, 즉석밥)
+
+15. SNACK - 과자/스낵
+16. CANNED - 캔/병조림
+17. GRAIN - 곡물/가루
+
+18. ALCOHOL - 주류
+19. SUPPLEMENT - 건강식품
+20. ETC - 기타
+
+복수 타입 카테고리 (type_group: "MIXED")
+
+채소/곡물류: RAW_PRODUCE + SIMPLE_PROCESSED + GRAIN
+육류: RAW_MEAT + PROCESSED_MEAT
+수산물: RAW_SEAFOOD + DRIED_SEAFOOD
+과일류: RAW_FRUIT + SIMPLE_PROCESSED
+간편식: RTC_MEAL + INSTANT + FROZEN_MEAL
+베이커리: BAKERY + SNACK
+저장식품: CANNED + DRIED_SEAFOOD + SAUCE_SEASONING + GRAIN
+기타: SUPPLEMENT + ETC
