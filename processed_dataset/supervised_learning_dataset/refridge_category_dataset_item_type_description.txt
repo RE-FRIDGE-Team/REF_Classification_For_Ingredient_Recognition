@@ -21,8 +21,6 @@
 17. GRAIN - 곡물/가루
 
 18. ALCOHOL - 주류
-19. SUPPLEMENT - 건강식품
-20. ETC - 기타
 
 복수 타입 카테고리 (type_group: "MIXED")
 
@@ -33,4 +31,3 @@
 간편식: RTC_MEAL + INSTANT + FROZEN_MEAL
 베이커리: BAKERY + SNACK
 저장식품: CANNED + DRIED_SEAFOOD + SAUCE_SEASONING + GRAIN
-기타: SUPPLEMENT + ETC
