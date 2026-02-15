@@ -132,7 +132,7 @@
         "item_type": "RTC_MEAL"
       },
       {
-        "name": "레토르트",
+        "name": "레트로트",
         "item_type": "RTC_MEAL"
       },
       {
@@ -200,10 +200,6 @@
       {
         "name": "생수",
         "item_type": "BEVERAGE"
-      },
-      {
-        "name": "에너지드링크",
-        "item_type": "BEVERAGE"
       }
     ]
   },
@@ -228,7 +224,7 @@
       }
     ]
   },
-  "베이커리": {
+  "간식류": {
     "type_group": "MIXED",
     "items": [
       {
@@ -249,7 +245,7 @@
       }
     ]
   },
-  "저장식품": {
+  "상온식품": {
     "type_group": "MIXED",
     "items": [
       {
