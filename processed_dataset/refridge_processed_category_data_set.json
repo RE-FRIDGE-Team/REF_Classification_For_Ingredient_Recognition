@@ -297,22 +297,5 @@
         "item_type": "GRAIN"
       }
     ]
-  },
-  "기타": {
-    "type_group": "MIXED",
-    "items": [
-      {
-        "name": "영양제",
-        "item_type": "SUPPLEMENT"
-      },
-      {
-        "name": "반려동물 식품",
-        "item_type": "ETC"
-      },
-      {
-        "name": "한약/건강즙",
-        "item_type": "SUPPLEMENT"
-      }
-    ]
   }
 }
