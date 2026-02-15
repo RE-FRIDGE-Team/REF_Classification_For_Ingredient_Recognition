@@ -135,31 +135,15 @@
       }
     ]
   },
-  "과일류": {
+  "과일/견과류": {
     "type_group": "MIXED",
     "items": [
       {
-        "name": "봄과일",
-        "item_type": "RAW_FRUIT"
-      },
-      {
-        "name": "여름과일",
-        "item_type": "RAW_FRUIT"
-      },
-      {
-        "name": "가을과일",
-        "item_type": "RAW_FRUIT"
-      },
-      {
-        "name": "겨울과일",
+        "name": "과일",
         "item_type": "RAW_FRUIT"
       },
       {
         "name": "견과류",
-        "item_type": "RAW_FRUIT"
-      },
-      {
-        "name": "수입과일",
         "item_type": "RAW_FRUIT"
       },
       {
