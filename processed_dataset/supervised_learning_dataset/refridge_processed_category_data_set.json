@@ -36,10 +36,6 @@
         "item_type": "RAW_PRODUCE"
       },
       {
-        "name": "냉동채소",
-        "item_type": "SIMPLE_PROCESSED"
-      },
-      {
         "name": "쌀/잡곡",
         "item_type": "GRAIN"
       },
