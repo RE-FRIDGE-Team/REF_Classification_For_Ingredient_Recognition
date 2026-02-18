@@ -150,6 +150,10 @@
       {
         "name": "샐러드팩",
         "item_type": "RTC_MEAL"
+      },
+      {
+        "name": "반찬류",
+        "item_type": "SIMPLE_PROCESSED"
       }
     ]
   },
