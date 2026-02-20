@@ -42,6 +42,10 @@
       {
         "name": "콩/두부",
         "item_type": "SIMPLE_PROCESSED"
+      },
+      {
+        "name": "면류",
+        "item_type": "GRAIN"
       }
     ]
   },
