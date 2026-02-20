@@ -108,6 +108,10 @@
       {
         "name": "미역/다시마",
         "item_type": "DRIED_SEAFOOD"
+      },
+      {
+        "name": "어육가공식품",
+        "item_type": "SIMPLE_PROCESSED"
       }
     ]
   },
