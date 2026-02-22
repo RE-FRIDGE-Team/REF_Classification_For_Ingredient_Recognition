@@ -112,6 +112,10 @@
       {
         "name": "어육가공식품",
         "item_type": "SIMPLE_PROCESSED"
+      },
+      {
+        "name": "어란",
+        "item_type":  "RAW_SEAFOOD"
       }
     ]
   },
