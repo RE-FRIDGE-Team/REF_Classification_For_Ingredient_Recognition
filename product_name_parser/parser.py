@@ -170,10 +170,6 @@ class REFProductNameParser:
 
         result = text
 
-        has_bracket = "[" in result
-        has_paren   = "(" in result
-        has_price   = "원" in result
-
         for i, pattern in enumerate(NOISE_PATTERNS):
             result = pattern.sub("", result)
 
