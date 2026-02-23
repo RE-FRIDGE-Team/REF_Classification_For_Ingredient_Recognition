@@ -175,19 +175,8 @@ class REFProductNameParser:
         has_price   = "원" in result
 
         for i, pattern in enumerate(NOISE_PATTERNS):
-            # 조기 스킵 (Java 로직 동일)
-            if i == _IDX_BRACKET and not has_bracket:
-                continue
-            if _IDX_PAREN_START <= i <= _IDX_PAREN_END and not has_paren:
-                continue
-            if i <= _IDX_PRICE_END and not has_price:
-                continue
-
             result = pattern.sub("", result)
 
-            # 너무 짧아지면 중단 (Java: if result.length() < 3)
-            if len(result) < 3:
-                break
 
         return result
 
