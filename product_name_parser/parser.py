@@ -177,7 +177,6 @@ class REFProductNameParser:
         for i, pattern in enumerate(NOISE_PATTERNS):
             result = pattern.sub("", result)
 
-
         return result
 
     @staticmethod
