@@ -1,0 +1,10 @@
+services:
+  refridge-jupyter:
+    build: .
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/workspace
+    environment:
+      - PYTHONPATH=/workspace
+      - JAVA_HOME=/usr/lib/jvm/default-java

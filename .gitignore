@@ -85,3 +85,9 @@ fabric.properties
 *.iml
 out
 gen
+
+
+# Docker 관련
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

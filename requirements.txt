@@ -1,0 +1,13 @@
+pyahocorasick>=2.0.0
+konlpy>=0.6.0
+JPype1>=1.4.0
+jupyter
+notebook
+ipykernel
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+plotly
+wordcloud
