@@ -91,3 +91,6 @@ gen
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Claude Code auto-memory (로컬 전용)
+.claude/memory/

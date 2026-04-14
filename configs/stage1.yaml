@@ -1,0 +1,51 @@
+# Stage 1 하이퍼파라미터 설정
+# 모든 학습 코드는 이 파일에서 값을 읽어야 함 (하드코딩 금지)
+
+data:
+  raw_path: "data/raw/products.csv"
+  processed_path: "data/processed/"
+  augmented_path: "data/augmented/"
+  columns:
+    product_name: "product_name"
+    large_category: "large_category"
+    medium_category: "medium_category"
+    category_tag: "category_tag"
+    ingredient_name: "ingredient_name"
+    brand: "brand"
+
+augmentation:
+  min_samples_per_class: 50
+  brand_swap: true
+  quantity_perturbation: true
+  token_shuffle: true
+
+model:
+  backbone: "monologg/koelectra-base-v3-discriminator"  # or "monologg/kobert"
+  max_length: 64
+  freeze_layers: 6        # 하위 N개 레이어 Freeze
+  dropout: 0.1
+
+training:
+  batch_size: 32
+  epochs: 10
+  base_lr: 2e-5
+  lr_decay_factor: 0.9    # Layer-wise LR Decay
+  loss_weights:
+    large_category: 0.4
+    medium_category: 0.4
+    category_tag: 0.2
+  n_folds: 5
+  seed: 42
+
+confidence_gate:
+  large_category: 0.80
+  medium_category: 0.60
+  category_tag: 0.50
+
+output:
+  model_dir: "models/"
+  checkpoint_name: "stage1_best.pt"
+
+logging:
+  level: "INFO"
+  log_file: "logs/train.log"

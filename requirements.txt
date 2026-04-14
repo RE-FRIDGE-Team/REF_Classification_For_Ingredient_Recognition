@@ -1,13 +1,26 @@
+# ── 런타임 ──────────────────────────────
+torch>=2.3.0
+transformers>=4.40.0
+sentencepiece>=0.2.0       # KoBERT 토크나이저 필수
+scikit-learn>=1.4.0
+faiss-cpu>=1.8.0           # Phase 2 임베딩 검색용
+numpy>=1.26.0
+pandas>=2.2.0
+pyyaml>=6.0.0
+
+# ── 한국어 NLP ───────────────────────────
 pyahocorasick>=2.0.0
 konlpy>=0.6.0
-JPype1>=1.4.0
+JPype1>=1.4.1
+
+# ── 시각화 / EDA (notebooks 전용) ────────
 jupyter
 notebook
 ipykernel
-pandas
-numpy
-scikit-learn
-matplotlib
-seaborn
-plotly
-wordcloud
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.20.0
+wordcloud>=1.9.0
+
+# ── 개발 / 테스트 ────────────────────────
+pytest>=8.0.0
