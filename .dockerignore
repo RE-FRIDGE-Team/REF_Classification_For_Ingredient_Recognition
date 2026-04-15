@@ -1,0 +1,38 @@
+# 빌드 컨텍스트에서 제외 (이미지 크기 및 빌드 속도 최적화)
+
+# Git
+.git
+.gitignore
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# 모델·결과·로그 (named volume으로 관리)
+models/
+results/
+logs/
+processed_dataset/
+
+# 노트북 체크포인트
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude 플랜/메모리
+.claude/plans/
