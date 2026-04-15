@@ -1,10 +1,95 @@
+# ═══════════════════════════════════════════════════════════════════
+# RE:FRIDGE ML — docker-compose.yml
+#
+# 서비스 구성:
+#   refridge-dev      PyCharm Python 인터프리터용 (항상 실행 유지)
+#   refridge-jupyter  Jupyter Notebook 서버
+#
+# ─── 빠른 시작 ──────────────────────────────────────────────────────
+#   docker compose up -d           # 백그라운드 실행
+#   docker compose up jupyter      # Jupyter만 실행
+#
+# ─── PyCharm 인터프리터 연결 방법 ─────────────────────────────────────
+#   1. PyCharm → Settings → Python Interpreter → Add Interpreter
+#   2. Docker Compose 선택
+#   3. Configuration file: ./docker-compose.yml
+#   4. Service: refridge-dev
+#   5. Python interpreter: /usr/local/bin/python
+#
+# ─── 플랫폼 참고 ────────────────────────────────────────────────────
+#   Mac M2 Pro (arm64) : Docker Desktop이 자동으로 arm64 이미지 선택
+#   Windows    (amd64) : Docker Desktop이 자동으로 amd64 이미지 선택
+#   → platform 지정 불필요 (python:3.11-slim이 multi-arch manifest)
+# ═══════════════════════════════════════════════════════════════════
+
 services:
+
+  # ─── PyCharm 인터프리터 전용 서비스 ─────────────────────────────────
+  # 이미지 빌드는 이 서비스가 담당 (refridge-jupyter는 build 없이 재사용)
+  # PyCharm이 이 컨테이너 안의 Python으로 스크립트를 실행함
+  # stdin_open + tty: 컨테이너가 종료되지 않고 대기 상태 유지
+  refridge-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: refridge-ml:latest
+    container_name: refridge-dev
+    stdin_open: true          # docker run -i
+    tty: true                 # docker run -t (컨테이너 유지)
+    command: ["tail", "-f", "/dev/null"]   # 무한 대기 (PyCharm 연결 대기)
+    volumes:
+      # 프로젝트 전체를 /workspace에 마운트 (코드 변경이 실시간 반영)
+      - .:/workspace
+      # 모델 체크포인트 / 결과 / 로그는 named volume으로 영속화
+      - refridge-models:/workspace/models
+      - refridge-results:/workspace/results
+      - refridge-logs:/workspace/logs
+    environment:
+      - PYTHONPATH=/workspace
+      - JAVA_HOME=/usr/lib/jvm/default-java
+      - PYTHONUNBUFFERED=1
+    working_dir: /workspace
+    # GPU 사용 시: Docker Desktop → Settings → Resources → GPU 활성화 후 아래 주석 해제
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ─── Jupyter Notebook 서비스 ─────────────────────────────────────
+  # build 없이 refridge-dev가 빌드한 이미지를 재사용 → 충돌 방지
+  # http://localhost:8888  (token: refridge)
   refridge-jupyter:
-    build: .
+    image: refridge-ml:latest
+    depends_on:
+      - refridge-dev
+    container_name: refridge-jupyter
+    command:
+      - jupyter
+      - notebook
+      - --ip=0.0.0.0
+      - --port=8888
+      - --no-browser
+      - --allow-root
+      - --NotebookApp.token=refridge
+      - --NotebookApp.notebook_dir=/workspace
     ports:
       - "8888:8888"
     volumes:
       - .:/workspace
+      - refridge-models:/workspace/models
+      - refridge-results:/workspace/results
+      - refridge-logs:/workspace/logs
     environment:
       - PYTHONPATH=/workspace
       - JAVA_HOME=/usr/lib/jvm/default-java
+      - PYTHONUNBUFFERED=1
+    working_dir: /workspace
+
+# ─── Named Volumes (모델·결과·로그 영속화) ──────────────────────────
+volumes:
+  refridge-models:
+  refridge-results:
+  refridge-logs:
