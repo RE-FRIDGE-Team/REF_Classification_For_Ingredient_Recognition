@@ -44,6 +44,8 @@ RUN pip install --no-cache-dir --upgrade pip \
 # ── Jupyter 커널 등록 (notebooks/ 사용 시) ──────────────────────────
 RUN python -m ipykernel install --name refridge --display-name "RE:FRIDGE (KoNLPy)"
 
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
+
 # ── 기본 CMD: PyCharm Docker 인터프리터 연결 시 컨테이너 유지 ────────
 # docker-compose의 각 서비스가 command로 override함
 CMD ["python"]

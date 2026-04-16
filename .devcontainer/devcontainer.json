@@ -1,0 +1,33 @@
+{
+  // RE:FRIDGE ML — Dev Container 설정 (Antigravity / VSCode Dev Containers 호환)
+  // 기존 docker-compose.yml의 refridge-dev 서비스를 재사용
+  "name": "RE:FRIDGE ML",
+
+  // ── docker-compose 연결 ──────────────────────────────────────────────
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "refridge-dev",
+  "workspaceFolder": "/workspace",
+
+  // ── Python 인터프리터 경로 ────────────────────────────────────────────
+  // Dockerfile에서 python:3.11-slim 베이스 → /usr/local/bin/python
+  "settings": {
+    "python.defaultInterpreterPath": "/usr/local/bin/python",
+    "python.terminal.activateEnvironment": false
+  },
+
+  // ── 권장 확장 (컨테이너 안에 자동 설치) ─────────────────────────────
+  "extensions": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-toolsai.jupyter"
+  ],
+
+  // ── 포트 포워딩 (Jupyter: 8888) ──────────────────────────────────────
+  "forwardPorts": [8888],
+
+  // ── 컨테이너 시작 후 실행 (선택) ─────────────────────────────────────
+  // "postStartCommand": "echo 'RE:FRIDGE ML container ready'",
+
+  // ── 종료 시 docker-compose down 하지 않음 (다른 서비스 유지) ──────────
+  "shutdownAction": "stopCompose"
+}

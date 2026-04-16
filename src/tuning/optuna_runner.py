@@ -130,7 +130,8 @@ class OptunaRunner:
             self._objective,
             n_trials=self._n_trials,
             timeout=self._timeout,
-            show_progress_bar=False,
+            show_progress_bar=True,
+            callbacks=[self._trial_callback],
         )
 
         best = study.best_trial
@@ -152,6 +153,20 @@ class OptunaRunner:
     # Objective
     # ──────────────────────────────────────────────────────────────
 
+    def _trial_callback(self, study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+        """trial 완료 시 결과를 INFO로 출력한다."""
+        if trial.state == optuna.trial.TrialState.COMPLETE:
+            logger.info(
+                "[%s] Trial %3d 완료 — large_F1=%.4f  (best=%.4f, trial #%d)",
+                self._model_name,
+                trial.number,
+                trial.value,
+                study.best_value,
+                study.best_trial.number,
+            )
+        elif trial.state == optuna.trial.TrialState.PRUNED:
+            logger.info("[%s] Trial %3d Pruned", self._model_name, trial.number)
+
     def _objective(self, trial: optuna.Trial) -> float:
         """
         Optuna objective 함수.
@@ -161,9 +176,15 @@ class OptunaRunner:
         params = self._suggest_params(trial)
         fold_f1s: list[float] = []
 
+        n_folds = len(self._folds)
         for fold_idx, (tr_idx, va_idx) in enumerate(self._folds):
             tr = self._df.iloc[tr_idx]
             va = self._df.iloc[va_idx]
+
+            logger.info(
+                "[%s] Trial %d | Fold %d/%d 시작 (train=%d, val=%d)",
+                self._model_name, trial.number, fold_idx + 1, n_folds, len(tr_idx), len(va_idx),
+            )
 
             model = self._model_cls(
                 **{k: v for k, v in self._extra_kwargs.items()},
