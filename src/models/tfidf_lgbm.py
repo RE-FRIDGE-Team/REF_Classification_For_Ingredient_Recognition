@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+import warnings
 from pathlib import Path
 from typing import Tuple
 
@@ -129,11 +130,18 @@ class TfidfLgbmClassifier(BaseClassifier):
         X_nouns: pd.Series,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         X = self._transform(X_refined, X_nouns)
-        return (
-            self._clf_large.predict(X),
-            self._clf_medium.predict(X),
-            self._clf_tag.predict(X),
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="X does not have valid feature names",
+                category=UserWarning,
+            )
+            return (
+                self._clf_large.predict(X),
+                self._clf_medium.predict(X),
+                self._clf_tag.predict(X),
+            )
+
 
     def predict_proba(
         self,
@@ -141,11 +149,17 @@ class TfidfLgbmClassifier(BaseClassifier):
         X_nouns: pd.Series,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         X = self._transform(X_refined, X_nouns)
-        return (
-            self._clf_large.predict_proba(X),
-            self._clf_medium.predict_proba(X),
-            self._clf_tag.predict_proba(X),
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="X does not have valid feature names",
+                category=UserWarning,
+            )
+            return (
+                self._clf_large.predict_proba(X),
+                self._clf_medium.predict_proba(X),
+                self._clf_tag.predict_proba(X),
+            )
 
     def get_params(self) -> dict:
         return {**self._tfidf_params, **self._lgbm_params}

@@ -236,7 +236,8 @@ class KoElectraMultiTaskClassifier(BaseClassifier):
                 optimizer.step()
                 scheduler.step()
                 epoch_loss += loss.item()
-            logger.debug("Epoch %d/%d — loss: %.4f", epoch + 1, hp["epochs"], epoch_loss / len(loader))
+            logger.info("  Epoch %d/%d — loss: %.4f", epoch + 1, hp["epochs"], epoch_loss / len(loader))
+
 
     def predict(
         self,

@@ -11,7 +11,8 @@ data:
     large_category:  "category_large"
     medium_category: "category_medium"
     category_tag:    "item_type"
-    brand:           "brand_name"
+    brand_name:      "brand_name"
+
   # 학습에서 제외할 카테고리 값
   exclude_large: ["기타"]
   exclude_tag:   ["UNKNOWN"]

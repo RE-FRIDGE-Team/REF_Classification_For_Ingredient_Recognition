@@ -1,0 +1,15 @@
+2026-04-16 12:59:57,743 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/ML_grocery_data_sampled.csv
+2026-04-16 12:59:57,748 [src.data_utils] INFO CSV 로드: ML_grocery_data_sampled.csv (1143행)
+2026-04-16 13:03:05,205 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/ML_grocery_data_sampled.csv
+2026-04-16 13:03:05,208 [src.data_utils] INFO CSV 로드: ML_grocery_data_sampled.csv (1143행)
+2026-04-16 13:03:05,209 [src.data_utils] INFO 결측치 제거: 1143행 → 1143행
+2026-04-16 13:03:05,213 [src.data_utils] INFO 최종 학습 데이터: 1061행, 대분류 11종, 중분류 52종, 태그 18종
+2026-04-16 13:03:05,214 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-04-16 13:03:05,800 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-04-16 13:03:05,801 [src.preprocess] INFO 제품명 정제 시작 (1061개)
+2026-04-16 13:03:05,839 [src.preprocess] INFO 명사 추출 시작
+2026-04-16 13:03:07,565 [src.preprocess] INFO 레이블 인코딩
+2026-04-16 13:03:07,568 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 8.6자, nouns_text 평균 길이: 7.1자
+2026-04-16 13:03:07,572 [run_experiment] INFO === [tfidf] 실행 ===
+2026-04-16 13:03:07,573 [tfidf] INFO [tfidf] HPO 시작: 100 trials
+2026-04-16 13:03:07,931 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 100 trials
