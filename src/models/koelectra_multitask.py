@@ -238,6 +238,7 @@ class KoElectraMultiTaskClassifier(BaseClassifier):
                 epoch_loss += loss.item()
             logger.info("  Epoch %d/%d — loss: %.4f", epoch + 1, hp["epochs"], epoch_loss / len(loader))
 
+
     def predict(
         self,
         X_refined: pd.Series,

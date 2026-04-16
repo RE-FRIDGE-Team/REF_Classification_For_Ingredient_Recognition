@@ -142,6 +142,7 @@ class TfidfLgbmClassifier(BaseClassifier):
                 self._clf_tag.predict(X),
             )
 
+
     def predict_proba(
         self,
         X_refined: pd.Series,

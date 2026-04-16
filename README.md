@@ -18,7 +18,6 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.3+-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org)
 [![KoELECTRA](https://img.shields.io/badge/KoELECTRA-v3-5A67D8?style=flat-square)](https://github.com/monologg/KoELECTRA)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Vibe_Coding-CC785C?style=flat-square)](https://claude.ai/code)
-[![License](https://img.shields.io/badge/License-MIT-10B981?style=flat-square)](LICENSE)
 
 [📐 전체 파이프라인 설계도](https://github.com/RE-FRIDGE-Team/REF_Classification_For_Ingredient_Recognition) · [🗂️ Issues](https://github.com/RE-FRIDGE-Team/REF_Classification_For_Ingredient_Recognition/issues) · [📋 Branches](https://github.com/RE-FRIDGE-Team/REF_Classification_For_Ingredient_Recognition/branches)
 
@@ -235,8 +234,6 @@ Issues는 `.github/ISSUE_TEMPLATE/`의 3가지 템플릿을 사용합니다.
 - `🧠 ML Task` — 모델 학습, 파이프라인 구현
 - `🔬 실험 & 분석` — 모델 비교, 하이퍼파라미터 탐색
 - `🗄️ Data / Infra` — 데이터 수집, 환경 설정
-
-브랜치 전략: `feature/REF-XXX-description` · `experiment/model-name`
 
 ---
 
