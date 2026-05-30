@@ -45,7 +45,7 @@ def load_data(
         df = pd.read_excel(path, dtype=str)
         logger.info("XLSX 로드: %s (%d행)", path.name, len(df))
     elif suffix == ".csv":
-        df = pd.read_csv(path, dtype=str)
+        df = pd.read_csv(path, dtype=str, encoding="cp949")
         logger.info("CSV 로드: %s (%d행)", path.name, len(df))
     else:
         raise ValueError(f"지원하지 않는 파일 형식: {suffix}. CSV 또는 XLSX만 허용.")
