@@ -90,6 +90,11 @@ def cv_evaluate(
         true_m = va["label_medium"].values
         true_t = va["label_tag"].values
 
+        print("- pred_m : ", pred_m[:5])
+        print("- true_m : ", true_m[:5])
+        print("- pred_type : ", pred_m.dtype)
+        print("- true_type : ", true_m.dtype)
+
         # 단일 샘플 추론 시간
         t1 = time.perf_counter()
         model.predict(va["refined_text"].iloc[:1], va["nouns_text"].iloc[:1])
