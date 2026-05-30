@@ -423,7 +423,7 @@ def main() -> None:
     err_ex:    dict = {}
     for mname, details in all_fold_details.items():
         per_class[mname] = per_class_f1_report(details, le["large"], task="large")
-        err_ex[mname]    = error_examples(details, df, le["large"], n=20)
+        err_ex[mname]    = error_examples(details, df, le["large"], n=5000)
 
     if cfg.get("output", {}).get("html_report", True):
         html_path = str(out_dir / "comparison_report.html")

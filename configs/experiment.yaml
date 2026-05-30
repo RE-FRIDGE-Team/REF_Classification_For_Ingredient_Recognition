@@ -57,7 +57,7 @@ optuna:
   pruner:          "MedianPruner"     # MedianPruner | NopPruner
   n_startup_trials: 10               # 초기 Random 탐색 수
   n_warmup_steps:   2               # Pruner warm-up fold 수
-  timeout_per_model: 60            # 모델당 최대 탐색 시간 (초)
+  timeout_per_model: 3600            # 모델당 최대 탐색 시간 (초)
   storage:         "sqlite:///results/optuna.db"   # 중단 후 재개 지원
 
 # ─── 모델별 HPO 탐색 공간 ─────────────────────────────────────────────
