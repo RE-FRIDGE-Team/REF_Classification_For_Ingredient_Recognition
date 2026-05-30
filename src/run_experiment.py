@@ -13,6 +13,12 @@ RE:FRIDGE Phase 1 — 3-Model 병렬 실험 CLI 진입점.
 
     # 3모델 병렬 실행
     python src/run_experiment.py --input ... --models all --parallel
+
+    # 평가 지표 변경 후 storage 초기화 (trial 0부터 재시작)
+    python src/run_experiment.py --input ... --reset-storage
+
+    # 기존 결과 보존하면서 새 study로 격리 (지표 변경 시 권장)
+    python src/run_experiment.py --input ... --study-version v2
 """
 
 from __future__ import annotations
@@ -26,6 +32,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+import optuna
 import yaml
 
 # 프로젝트 루트를 PYTHONPATH에 추가 (src/ 내부에서 실행 시 필요)
@@ -61,6 +68,41 @@ MODEL_REGISTRY = {
 
 
 # ──────────────────────────────────────────────────────────────────
+# Storage 관리 헬퍼
+# ──────────────────────────────────────────────────────────────────
+
+def _delete_study_if_exists(study_name: str, storage: str, logger: logging.Logger) -> None:
+    """
+    지정된 study_name을 storage에서 삭제한다.
+    존재하지 않으면 조용히 넘어간다.
+
+    Args:
+        study_name: 삭제할 study 식별자
+        storage:    Optuna DB URI (예: "sqlite:///results/optuna.db")
+        logger:     호출자 로거
+    """
+    try:
+        optuna.delete_study(study_name=study_name, storage=storage)
+        logger.info("study 삭제 완료: %s", study_name)
+    except KeyError:
+        logger.info("삭제할 study 없음 (신규): %s", study_name)
+
+
+def _build_study_name(model_name: str, study_version: str) -> str:
+    """
+    study 식별자를 생성한다.
+
+    Args:
+        model_name:    모델 내부 이름 (예: "tfidf_lgbm")
+        study_version: CLI --study-version 값 (예: "v1", "v2")
+
+    Returns:
+        "ref_tfidf_lgbm_v1" 형태의 study 이름
+    """
+    return f"ref_{model_name}_{study_version}"
+
+
+# ──────────────────────────────────────────────────────────────────
 # 단일 모델 실험 함수 (ProcessPoolExecutor worker)
 # ──────────────────────────────────────────────────────────────────
 
@@ -75,6 +117,8 @@ def run_single_model(
     extra_kwargs: dict,
     optuna_cfg: dict,
     output_dir: str,
+    study_version: str,    # ← 추가: study name suffix
+    reset_storage: bool,   # ← 추가: 기존 study 삭제 여부
 ) -> dict:
     """
     단일 모델의 HPO + CV 평가를 실행하고 결과 딕셔너리를 반환한다.
@@ -92,8 +136,16 @@ def run_single_model(
     with open(folds_path, "rb") as f:
         folds = pickle.load(f)
 
+    storage   = optuna_cfg.get("storage")
+    study_name = _build_study_name(model_name, study_version)
+
+    # ── storage 초기화 (--reset-storage 플래그) ──
+    # storage가 None(메모리 모드)이면 초기화 불필요
+    if reset_storage and storage:
+        _delete_study_if_exists(study_name, storage, logger)
+
     # ── HPO ──
-    logger.info("[%s] HPO 시작: %d trials", model_key, n_trials)
+    logger.info("[%s] HPO 시작: %d trials (study=%s)", model_key, n_trials, study_name)
     runner = OptunaRunner(
         model_name=model_name,
         model_cls=model_cls,
@@ -106,8 +158,9 @@ def run_single_model(
         n_startup_trials=optuna_cfg.get("n_startup_trials", 10),
         n_warmup_steps=optuna_cfg.get("n_warmup_steps", 2),
         timeout=optuna_cfg.get("timeout_per_model", 3600),
-        storage=optuna_cfg.get("storage"),
+        storage=storage,
         extra_kwargs=extra_kwargs,
+        study_name=study_name,      # ← 주입
     )
     study_result = runner.run()
 
@@ -172,6 +225,28 @@ def parse_args() -> argparse.Namespace:
                         help="ProcessPoolExecutor로 3모델 동시 실행")
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+
+    # ── Storage 관리 인수 ──
+    parser.add_argument(
+        "--study-version",
+        type=str,
+        default="v1",
+        help=(
+            "Optuna study name suffix (기본: v1). "
+            "평가 지표 변경 등으로 기존 결과와 격리할 때 v2, v3 등으로 올린다. "
+            "storage가 None(메모리)이면 무시된다."
+        ),
+    )
+    parser.add_argument(
+        "--reset-storage",
+        action="store_true",
+        help=(
+            "실행 전 해당 study_version의 기존 Optuna study를 삭제하고 trial 0부터 재시작한다. "
+            "평가 지표를 변경한 경우 반드시 사용해야 TPE가 오염된 과거 trial을 참조하지 않는다. "
+            "storage가 None(메모리)이면 무시된다."
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -191,6 +266,12 @@ def main() -> None:
     )
     Path(args.output).mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("run_experiment")
+
+    # ── study-version / reset-storage 요약 로깅 ──
+    logger.info(
+        "study_version=%s | reset_storage=%s",
+        args.study_version, args.reset_storage,
+    )
 
     # ── 설정 로드 ──
     with open(args.config, encoding="utf-8") as f:
@@ -280,6 +361,8 @@ def main() -> None:
                     run_single_model,
                     key, mname, mcls, sspace, nt,
                     df_path, folds_path, ekwargs, optuna_cfg, args.output,
+                    args.study_version,   # ← 추가
+                    args.reset_storage,   # ← 추가
                 )
                 futures[future] = key
 
@@ -299,6 +382,8 @@ def main() -> None:
             r = run_single_model(
                 key, mname, mcls, sspace, nt,
                 df_path, folds_path, ekwargs, optuna_cfg, args.output,
+                args.study_version,   # ← 추가
+                args.reset_storage,   # ← 추가
             )
             all_results[r["model_name"]]       = r["cv_result"]
             all_study_results[r["model_name"]] = r["study_result"]
