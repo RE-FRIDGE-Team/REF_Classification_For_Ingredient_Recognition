@@ -1,15 +1,15 @@
 {
   "ngram_range_idx": 2,
-  "max_features": 8325,
-  "min_df": 3,
-  "sublinear_tf": true,
-  "n_estimators": 792,
-  "num_leaves": 158,
-  "max_depth": 8,
-  "learning_rate": 0.023827947349960917,
-  "min_child_samples": 5,
-  "colsample_bytree": 0.6568988486726328,
-  "subsample": 0.8053257156592817,
-  "reg_alpha": 0.0046811473904347254,
-  "reg_lambda": 0.10894130245452022
+  "max_features": 6877,
+  "min_df": 4,
+  "sublinear_tf": false,
+  "n_estimators": 702,
+  "num_leaves": 241,
+  "max_depth": 4,
+  "learning_rate": 0.1018466408095299,
+  "min_child_samples": 6,
+  "colsample_bytree": 0.9992504963727847,
+  "subsample": 0.6584694614524742,
+  "reg_alpha": 0.007081373779543566,
+  "reg_lambda": 0.07771220582816346
 }

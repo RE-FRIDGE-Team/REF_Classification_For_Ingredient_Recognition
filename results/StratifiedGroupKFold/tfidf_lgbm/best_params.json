@@ -1,0 +1,15 @@
+{
+  "ngram_range_idx": 2,
+  "max_features": 17744,
+  "min_df": 4,
+  "sublinear_tf": false,
+  "n_estimators": 492,
+  "num_leaves": 153,
+  "max_depth": 7,
+  "learning_rate": 0.14415343625806318,
+  "min_child_samples": 7,
+  "colsample_bytree": 0.9938244373557671,
+  "subsample": 0.6068021409846008,
+  "reg_alpha": 0.00046711342162537547,
+  "reg_lambda": 0.007079063060798722
+}
