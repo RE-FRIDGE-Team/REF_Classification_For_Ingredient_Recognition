@@ -10752,3 +10752,486 @@
 2026-05-30 02:58:18,811 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  24 완료 — large_F1=0.7746  (best=0.7759, trial #23)
 2026-05-30 02:58:18,857 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 25 | Fold 1/5 시작 (train=3867, val=967)
 2026-05-30 03:01:27,801 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 25 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:48:57,927 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=True
+2026-05-30 04:48:57,927 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 04:50:27,504 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=True
+2026-05-30 04:50:27,504 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 04:50:27,531 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 04:50:27,593 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 04:50:27,611 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 04:50:27,618 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 04:50:28,475 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 04:50:28,476 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 04:50:28,696 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 04:50:32,019 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 04:50:32,028 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 04:50:32,037 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 04:50:32,046 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 04:50:32,329 [tfidf] INFO 삭제할 study 없음 (신규): ref_tfidf_lgbm_GroupKFold_v1
+2026-05-30 04:50:32,329 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 04:50:32,373 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 04:50:32,415 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:50:49,801 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 0 실패: 'medium'
+2026-05-30 04:50:49,859 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:51:02,621 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 1 실패: 'medium'
+2026-05-30 04:51:02,628 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:51:15,003 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 2 실패: 'medium'
+2026-05-30 04:51:15,016 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:51:27,369 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 3 실패: 'medium'
+2026-05-30 04:51:27,376 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:51:42,091 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 4 실패: 'medium'
+2026-05-30 04:51:42,140 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   0 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:51:42,189 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:51:43,460 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 1, Fold 0 실패: 'medium'
+2026-05-30 04:51:43,466 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:51:44,397 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 1, Fold 1 실패: 'medium'
+2026-05-30 04:51:44,403 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:51:45,465 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 1, Fold 2 실패: 'medium'
+2026-05-30 04:51:45,470 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:51:47,030 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 1, Fold 3 실패: 'medium'
+2026-05-30 04:51:47,036 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:51:48,773 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 1, Fold 4 실패: 'medium'
+2026-05-30 04:51:48,784 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   1 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:51:48,809 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:52:02,483 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 2, Fold 0 실패: 'medium'
+2026-05-30 04:52:02,490 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:52:19,071 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 2, Fold 1 실패: 'medium'
+2026-05-30 04:52:19,089 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:52:31,672 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 2, Fold 2 실패: 'medium'
+2026-05-30 04:52:31,679 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:52:46,618 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 2, Fold 3 실패: 'medium'
+2026-05-30 04:52:46,627 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:52:59,835 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 2, Fold 4 실패: 'medium'
+2026-05-30 04:52:59,861 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   2 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:52:59,904 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:53:16,407 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 3, Fold 0 실패: 'medium'
+2026-05-30 04:53:16,418 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:53:30,444 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 3, Fold 1 실패: 'medium'
+2026-05-30 04:53:30,458 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:53:47,804 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 3, Fold 2 실패: 'medium'
+2026-05-30 04:53:47,824 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:54:01,624 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 3, Fold 3 실패: 'medium'
+2026-05-30 04:54:01,630 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:54:15,783 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 3, Fold 4 실패: 'medium'
+2026-05-30 04:54:15,799 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   3 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:54:15,831 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:54:17,664 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 4, Fold 0 실패: 'medium'
+2026-05-30 04:54:17,669 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:54:19,170 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 4, Fold 1 실패: 'medium'
+2026-05-30 04:54:19,177 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:54:20,758 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 4, Fold 2 실패: 'medium'
+2026-05-30 04:54:20,764 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:54:22,515 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 4, Fold 3 실패: 'medium'
+2026-05-30 04:54:22,521 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:54:24,271 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 4, Fold 4 실패: 'medium'
+2026-05-30 04:54:24,282 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   4 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:54:24,308 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:54:34,882 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 5, Fold 0 실패: 'medium'
+2026-05-30 04:54:34,893 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:54:45,567 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 5, Fold 1 실패: 'medium'
+2026-05-30 04:54:45,573 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:54:54,570 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 5, Fold 2 실패: 'medium'
+2026-05-30 04:54:54,577 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:55:03,459 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 5, Fold 3 실패: 'medium'
+2026-05-30 04:55:03,465 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:55:12,577 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 5, Fold 4 실패: 'medium'
+2026-05-30 04:55:12,591 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   5 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:55:12,619 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:55:14,956 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 6, Fold 0 실패: 'medium'
+2026-05-30 04:55:14,967 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:55:16,842 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 6, Fold 1 실패: 'medium'
+2026-05-30 04:55:16,847 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:55:18,735 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 6, Fold 2 실패: 'medium'
+2026-05-30 04:55:18,741 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:55:20,746 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 6, Fold 3 실패: 'medium'
+2026-05-30 04:55:20,753 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:55:22,663 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 6, Fold 4 실패: 'medium'
+2026-05-30 04:55:22,675 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   6 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:55:22,702 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:56:05,564 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 7, Fold 0 실패: 'medium'
+2026-05-30 04:56:05,571 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:56:48,438 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 7, Fold 1 실패: 'medium'
+2026-05-30 04:56:48,459 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:57:32,071 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 7, Fold 2 실패: 'medium'
+2026-05-30 04:57:32,079 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:58:15,013 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 7, Fold 3 실패: 'medium'
+2026-05-30 04:58:15,035 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:59:28,536 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=True
+2026-05-30 04:59:28,536 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 04:59:28,554 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 04:59:28,557 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 04:59:28,558 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 04:59:28,559 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 04:59:29,160 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 04:59:29,161 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 04:59:29,366 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 04:59:32,313 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 04:59:32,317 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 04:59:32,324 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 04:59:32,332 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 04:59:32,564 [tfidf] INFO study 삭제 완료: ref_tfidf_lgbm_GroupKFold_v1
+2026-05-30 04:59:32,565 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 04:59:32,582 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 04:59:32,617 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:59:37,368 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 0 실패: 'medium'
+2026-05-30 04:59:37,385 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 04:59:41,193 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 1 실패: 'medium'
+2026-05-30 04:59:41,203 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 04:59:45,285 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 2 실패: 'medium'
+2026-05-30 04:59:45,295 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 04:59:48,790 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 3 실패: 'medium'
+2026-05-30 04:59:48,800 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 04:59:51,785 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 4 실패: 'medium'
+2026-05-30 04:59:51,803 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   0 완료 — large_F1=0.0000  (best=0.0000, trial #0)
+2026-05-30 04:59:51,835 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 04:59:55,359 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 1, Fold 0 실패: 'medium'
+2026-05-30 04:59:55,365 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:00:33,741 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=True
+2026-05-30 05:00:33,741 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 05:00:33,756 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 05:00:33,758 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 05:00:33,760 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 05:00:33,760 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 05:00:34,219 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 05:00:34,220 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 05:00:34,424 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 05:00:37,129 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 05:00:37,132 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 05:00:37,140 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 05:00:37,146 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 05:00:37,384 [tfidf] INFO study 삭제 완료: ref_tfidf_lgbm_GroupKFold_v1
+2026-05-30 05:00:37,384 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 05:00:37,398 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 05:00:37,434 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:00:47,881 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 0 실패: 'medium'
+2026-05-30 05:00:47,894 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:00:58,349 [src.tuning.optuna_runner] WARNING [tfidf_lgbm] Trial 0, Fold 1 실패: 'medium'
+2026-05-30 05:00:58,357 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:11:24,250 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=True
+2026-05-30 05:11:24,250 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 05:11:24,278 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 05:11:24,289 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 05:11:24,296 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 05:11:24,345 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 05:11:24,947 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 05:11:24,947 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 05:11:25,192 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 05:11:28,135 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 05:11:28,139 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 05:11:28,148 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 05:11:28,158 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 05:11:28,365 [tfidf] INFO study 삭제 완료: ref_tfidf_lgbm_GroupKFold_v1
+2026-05-30 05:11:28,365 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 05:11:28,379 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 05:11:28,411 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:11:31,975 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:11:35,528 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:11:39,086 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:11:42,745 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 0 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:11:46,293 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   0 완료 — large_F1=0.5568  (best=0.5568, trial #0)
+2026-05-30 05:11:46,341 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:11:50,584 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:11:55,354 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:12:00,184 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:12:05,142 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 1 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:12:09,469 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   1 완료 — large_F1=0.4951  (best=0.5568, trial #0)
+2026-05-30 05:12:09,499 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:12:16,798 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:12:23,492 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:12:30,910 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:12:38,097 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 2 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:12:45,801 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   2 완료 — large_F1=0.5692  (best=0.5692, trial #2)
+2026-05-30 05:12:45,838 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:13:04,898 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:13:22,286 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:13:38,411 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:14:00,089 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 3 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:14:21,335 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   3 완료 — large_F1=0.7157  (best=0.7157, trial #3)
+2026-05-30 05:14:21,375 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:15:07,012 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:15:57,250 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:16:58,739 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:17:50,767 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 4 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:18:37,324 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   4 완료 — large_F1=0.7759  (best=0.7759, trial #4)
+2026-05-30 05:18:37,374 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:18:41,297 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:18:45,794 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:18:49,636 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:18:53,411 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 5 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:18:57,400 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   5 완료 — large_F1=0.6763  (best=0.7759, trial #4)
+2026-05-30 05:18:57,431 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:19:05,664 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:19:14,028 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:19:22,713 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:19:30,692 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 6 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:19:38,886 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   6 완료 — large_F1=0.7238  (best=0.7759, trial #4)
+2026-05-30 05:19:38,917 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:20:38,933 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:21:38,111 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:22:46,126 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:24:21,334 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 7 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:25:29,812 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   7 완료 — large_F1=0.7725  (best=0.7759, trial #4)
+2026-05-30 05:25:29,867 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 8 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:26:06,558 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 8 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:26:40,916 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 8 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:27:12,318 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 8 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:27:45,840 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 8 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:28:14,333 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   8 완료 — large_F1=0.7071  (best=0.7759, trial #4)
+2026-05-30 05:28:14,377 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 9 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:28:27,313 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 9 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:28:39,415 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 9 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:28:51,235 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 9 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:29:04,645 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 9 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:29:17,225 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial   9 완료 — large_F1=0.7459  (best=0.7759, trial #4)
+2026-05-30 05:29:17,266 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 10 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:29:29,082 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 10 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:29:41,245 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 10 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:29:53,177 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 10 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:30:07,125 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 10 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:30:19,341 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  10 완료 — large_F1=0.7037  (best=0.7759, trial #4)
+2026-05-30 05:30:19,393 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 11 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:30:41,437 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 11 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:31:04,233 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 11 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:31:26,050 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 11 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:31:49,288 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 11 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:32:23,263 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  11 완료 — large_F1=0.7748  (best=0.7759, trial #4)
+2026-05-30 05:32:23,327 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 12 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:32:39,262 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 12 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:32:53,621 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 12 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:33:07,691 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 12 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:33:21,784 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 12 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:33:36,215 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  12 완료 — large_F1=0.7545  (best=0.7759, trial #4)
+2026-05-30 05:33:36,255 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 13 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:33:53,887 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 13 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:34:09,681 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 13 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:34:26,746 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 13 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:34:42,475 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 13 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:34:57,874 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  13 완료 — large_F1=0.7109  (best=0.7759, trial #4)
+2026-05-30 05:34:57,923 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 14 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:35:01,397 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 14 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:35:04,750 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 14 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:35:08,116 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  14 Pruned
+2026-05-30 05:35:08,162 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 15 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:35:25,695 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 15 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:35:42,125 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 15 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:35:58,092 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 15 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:36:14,496 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 15 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:36:30,225 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  15 완료 — large_F1=0.7593  (best=0.7759, trial #4)
+2026-05-30 05:36:30,296 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 16 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:36:48,740 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 16 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:37:07,422 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 16 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:37:25,140 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 16 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:37:50,783 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 16 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:38:15,251 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  16 완료 — large_F1=0.7274  (best=0.7759, trial #4)
+2026-05-30 05:38:15,299 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 17 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:38:22,894 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 17 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:38:29,386 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 17 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:38:36,970 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 17 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:38:44,260 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 17 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:38:50,968 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  17 완료 — large_F1=0.7190  (best=0.7759, trial #4)
+2026-05-30 05:38:51,008 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 18 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:39:42,112 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 18 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:40:21,557 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 18 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:40:53,550 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 18 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:41:24,591 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 18 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:41:57,927 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  18 완료 — large_F1=0.7463  (best=0.7759, trial #4)
+2026-05-30 05:41:58,005 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 19 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:42:01,634 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 19 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:42:05,449 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 19 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:42:08,738 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  19 Pruned
+2026-05-30 05:42:08,786 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 20 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:42:32,086 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 20 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:42:58,875 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 20 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:43:20,452 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 20 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:43:37,945 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 20 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:43:57,309 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  20 완료 — large_F1=0.7651  (best=0.7759, trial #4)
+2026-05-30 05:43:57,404 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 21 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:45:23,875 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 21 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:46:39,215 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 21 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:47:45,685 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 21 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:48:36,094 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 21 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:49:29,083 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  21 완료 — large_F1=0.7716  (best=0.7759, trial #4)
+2026-05-30 05:49:29,141 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 22 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:50:26,890 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 22 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:51:22,950 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 22 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:52:18,035 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 22 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:53:16,721 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 22 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:54:15,848 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  22 완료 — large_F1=0.7761  (best=0.7761, trial #22)
+2026-05-30 05:54:15,915 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 23 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:54:56,965 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 23 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:55:37,700 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 23 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 05:56:20,991 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 23 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 05:56:59,123 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 23 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 05:57:37,138 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  23 완료 — large_F1=0.7736  (best=0.7761, trial #22)
+2026-05-30 05:57:37,181 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 24 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 05:58:30,407 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 24 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 05:59:24,483 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 24 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:00:16,070 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 24 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 06:01:15,366 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 24 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 06:02:58,469 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  24 완료 — large_F1=0.7679  (best=0.7761, trial #22)
+2026-05-30 06:02:58,547 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 25 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:04:31,380 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 25 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:05:44,006 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 25 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:06:51,236 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 25 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 06:08:04,121 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 25 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 06:09:11,324 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  25 완료 — large_F1=0.7545  (best=0.7761, trial #22)
+2026-05-30 06:09:11,390 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 26 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:09:41,654 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 26 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:10:20,421 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 26 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:10:56,221 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 26 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 06:11:33,077 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 26 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 06:12:05,703 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  26 완료 — large_F1=0.7601  (best=0.7761, trial #22)
+2026-05-30 06:12:05,705 [src.tuning.optuna_runner] INFO [tfidf_lgbm] 최적 trial #22 — large_F1=0.7761
+2026-05-30 06:12:05,724 [tfidf] INFO [tfidf] 최적 파라미터로 CV 평가 시작
+2026-05-30 06:30:47,994 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=False
+2026-05-30 06:30:47,994 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 06:30:48,022 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 06:30:48,026 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 06:30:48,029 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 06:30:48,031 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 06:30:48,589 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 06:30:48,589 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 06:30:48,791 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 06:30:50,758 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 06:30:50,762 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 06:30:50,876 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 06:30:50,883 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 06:30:50,887 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 06:30:51,080 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 06:30:51,136 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 27 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:32:21,882 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 27 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:33:47,430 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 27 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:34:53,748 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 27 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 06:36:04,509 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 27 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 06:37:09,344 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  27 완료 — large_F1=0.7645  (best=0.7761, trial #22)
+2026-05-30 06:37:09,399 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 28 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:37:20,624 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 28 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:37:28,744 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 28 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:37:39,997 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  28 Pruned
+2026-05-30 06:37:40,080 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 29 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:38:19,427 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 29 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:39:01,053 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 29 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:39:41,190 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  29 Pruned
+2026-05-30 06:39:41,288 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 30 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:40:06,010 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 30 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:40:32,585 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 30 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:41:07,182 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  30 Pruned
+2026-05-30 06:41:07,233 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 31 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:42:08,104 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 31 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:43:14,100 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 31 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:44:17,397 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 31 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 06:45:18,583 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 31 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 06:46:30,434 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  31 완료 — large_F1=0.7739  (best=0.7761, trial #22)
+2026-05-30 06:46:30,520 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 32 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:48:01,839 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 32 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:49:20,528 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 32 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:50:34,353 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 32 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 06:55:55,126 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=False
+2026-05-30 06:55:55,126 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 06:55:55,142 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 06:55:55,144 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 06:55:55,146 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 06:55:55,147 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 06:55:55,756 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 06:55:55,756 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 06:55:55,964 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 06:55:58,740 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 06:55:58,743 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 06:55:58,753 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 06:55:58,763 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 06:55:58,767 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 06:55:59,085 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 06:55:59,369 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 33 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 06:56:47,648 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 33 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 06:57:31,685 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 33 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 06:58:21,080 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 33 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 06:59:07,521 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 33 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 06:59:52,402 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  33 완료 — large_F1=0.7742  (best=0.7761, trial #22)
+2026-05-30 06:59:52,458 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 34 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 07:00:15,629 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 34 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 07:00:43,150 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 34 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 07:01:11,163 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 34 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 07:01:38,727 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 34 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 07:02:02,392 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  34 완료 — large_F1=0.7732  (best=0.7761, trial #22)
+2026-05-30 07:02:02,394 [src.tuning.optuna_runner] INFO [tfidf_lgbm] 최적 trial #22 — large_F1=0.7761
+2026-05-30 07:02:02,406 [tfidf] INFO [tfidf] 최적 파라미터로 CV 평가 시작
+2026-05-30 07:07:26,870 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=False
+2026-05-30 07:07:26,871 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 07:07:26,886 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 07:07:26,888 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 07:07:26,889 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 07:07:26,890 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 07:07:27,377 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 07:07:27,378 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 07:07:27,580 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 07:07:30,444 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 07:07:30,447 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 07:07:30,455 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 07:07:30,462 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 07:07:30,467 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 07:07:30,667 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 07:07:30,727 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 35 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 07:07:47,253 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 35 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 07:08:02,607 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 35 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 07:08:18,478 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 35 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 07:08:34,927 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 35 | Fold 5/5 시작 (train=3868, val=966)
+2026-05-30 07:08:51,053 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  35 완료 — large_F1=0.7624  (best=0.7761, trial #22)
+2026-05-30 07:08:51,055 [src.tuning.optuna_runner] INFO [tfidf_lgbm] 최적 trial #22 — large_F1=0.7761
+2026-05-30 07:08:51,073 [tfidf] INFO [tfidf] 최적 파라미터로 CV 평가 시작
+2026-05-30 07:15:51,935 [run_experiment] INFO 실험 설정 — cv_strategy=GroupKFold, study_version=v1, reset_storage=False
+2026-05-30 07:15:51,935 [run_experiment] INFO 데이터 로드: product_data_collection/refined_grocery_csv_for_classification/recognition_dataset.csv
+2026-05-30 07:15:51,949 [src.data_utils] INFO CSV 로드: recognition_dataset.csv (4997행)
+2026-05-30 07:15:51,951 [src.data_utils] INFO 결측치 제거: 4997행 → 4997행
+2026-05-30 07:15:51,952 [src.data_utils] INFO 최종 학습 데이터: 4834행, 대분류 11종, 중분류 57종, 태그 18종
+2026-05-30 07:15:51,953 [src.preprocess] INFO 브랜드 사전 로드: 556개
+2026-05-30 07:15:52,426 [src.preprocess] INFO Okt 형태소 분석기 초기화 완료
+2026-05-30 07:15:52,427 [src.preprocess] INFO 제품명 정제 시작 (4834개)
+2026-05-30 07:15:52,637 [src.preprocess] INFO 명사 추출 시작
+2026-05-30 07:15:55,465 [src.preprocess] INFO 레이블 인코딩
+2026-05-30 07:15:55,469 [src.preprocess] INFO 전처리 완료 — refined_text 평균 길이: 16.7자, nouns_text 평균 길이: 10.5자
+2026-05-30 07:15:55,477 [src.data_utils] INFO [GroupKFold] 5-Fold 구성 완료
+  val 크기:     [967, 967, 967, 967, 966] (mean=967)
+  val 브랜드 수: [306, 324, 325, 325, 325]
+  val 클래스 수: [11, 11, 11, 11, 11] / 전체 11
+2026-05-30 07:15:55,484 [run_experiment] INFO === [tfidf] 실행 ===
+2026-05-30 07:15:55,489 [tfidf] INFO [tfidf] HPO 시작: 40 trials (study=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 07:15:55,680 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Optuna study 시작: 40 trials (study_name=ref_tfidf_lgbm_GroupKFold_v1)
+2026-05-30 07:15:55,774 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 36 | Fold 1/5 시작 (train=3867, val=967)
+2026-05-30 07:16:44,964 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 36 | Fold 2/5 시작 (train=3867, val=967)
+2026-05-30 07:17:35,856 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 36 | Fold 3/5 시작 (train=3867, val=967)
+2026-05-30 07:18:26,915 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial 36 | Fold 4/5 시작 (train=3867, val=967)
+2026-05-30 07:19:18,395 [src.tuning.optuna_runner] INFO [tfidf_lgbm] Trial  36 Pruned
+2026-05-30 07:19:18,431 [src.tuning.optuna_runner] INFO [tfidf_lgbm] 최적 trial #22 — large_F1=0.7761
+2026-05-30 07:19:18,472 [tfidf] INFO [tfidf] 최적 파라미터로 CV 평가 시작
+2026-05-30 07:20:07,855 [src.evaluate] INFO Fold 1/5 — large_F1=0.7357, medium_F1=0.6176, tag_F1=0.6619
+2026-05-30 07:20:51,903 [src.evaluate] INFO Fold 2/5 — large_F1=0.7910, medium_F1=0.6835, tag_F1=0.7315
+2026-05-30 07:21:35,063 [src.evaluate] INFO Fold 3/5 — large_F1=0.7550, medium_F1=0.6470, tag_F1=0.6790
+2026-05-30 07:22:17,601 [src.evaluate] INFO Fold 4/5 — large_F1=0.7897, medium_F1=0.6650, tag_F1=0.7212
+2026-05-30 07:23:01,357 [src.evaluate] INFO Fold 5/5 — large_F1=0.7702, medium_F1=0.6164, tag_F1=0.6758
+2026-05-30 07:23:01,358 [src.evaluate] INFO CV 완료 — large_F1=0.7683±0.0210, medium_F1=0.6459±0.0263, tag_F1=0.6939±0.0273, train=44.2s, infer=11.47ms
+2026-05-30 07:23:01,396 [run_experiment] INFO 전체 실험 완료: 425.9초
+2026-05-30 07:23:01,561 [src.compare] INFO 차트 저장: results/GroupKFold/comparison_chart.png
+2026-05-30 07:23:01,564 [src.compare] INFO 비교표 CSV 저장: results/GroupKFold/comparison_table.csv
+2026-05-30 07:23:01,578 [src.compare] INFO HTML 리포트 저장: results/GroupKFold/comparison_report.html
+2026-05-30 07:23:01,578 [run_experiment] INFO 리포트: results/GroupKFold/comparison_report.html
