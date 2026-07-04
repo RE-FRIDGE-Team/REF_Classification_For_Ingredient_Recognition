@@ -56,6 +56,7 @@ class TfidfLgbmClassifier(BaseClassifier):
         subsample: float = 0.8,
         reg_alpha: float = 0.01,
         reg_lambda: float = 0.01,
+        class_weight: str | None = "balanced",
         seed: int = 42,
     ) -> None:
         if not _LGB_AVAILABLE:
@@ -78,6 +79,7 @@ class TfidfLgbmClassifier(BaseClassifier):
             subsample=subsample,
             reg_alpha=reg_alpha,
             reg_lambda=reg_lambda,
+            class_weight=class_weight,
             random_state=seed,
             n_jobs=-1,
             verbose=-1,
