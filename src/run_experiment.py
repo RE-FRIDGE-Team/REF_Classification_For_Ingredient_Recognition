@@ -2,16 +2,15 @@
 RE:FRIDGE Phase 1 — 3-Model 병렬 실험 CLI 진입점.
 
 사용 예:
-    # 기본 실행 (GroupKFold)
+    # 기본 실행 (StratifiedKFold, 증강 train-only)
     python src/run_experiment.py \
-        --input product_data_collection/refined_grocery_csv_for_classification/ML_grocery_data_sampled.csv \
+        --input product_data_collection/refined_grocery_csv_for_classification/recognition_dataset_augmented.csv \
         --config configs/experiment.yaml \
         --output results/
 
     # CV 전략 비교 실험
-    python src/run_experiment.py --input ... --cv-strategy StratifiedGroupKFold
+    python src/run_experiment.py --input ... --cv-strategy GroupKFold
     python src/run_experiment.py --input ... --cv-strategy StratifiedKFold
-    python src/run_experiment.py --input ... --cv-strategy KFold
 
     # 특정 모델만
     python src/run_experiment.py --input ... --models tfidf --n-trials 10
@@ -41,7 +40,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.data_utils import CVStrategy, data_summary, load_data, make_folds
+from src.data_utils import CVStrategy, data_summary, load_data, make_folds_orig_only
 from src.preprocess import REFPreprocessor
 from src.models import (
     FastTextKonlpyClassifier,
@@ -49,7 +48,12 @@ from src.models import (
     TfidfLgbmClassifier,
 )
 from src.tuning.optuna_runner import OptunaRunner
-from src.evaluate import cv_evaluate, error_examples, per_class_f1_report
+from src.evaluate import (
+    cv_evaluate,
+    error_examples,
+    per_class_f1_report,
+    save_confusion_matrices,
+)
 from src.compare import (
     print_comparison_table,
     save_comparison_chart,
@@ -109,16 +113,17 @@ def run_single_model(
     n_trials: int,
     df_path: str,
     folds_path: str,
+    label_encoders_path: str,   # ← 추가: worker 는 prep 에 접근 불가하므로 pickle 로 전달
     extra_kwargs: dict,
     optuna_cfg: dict,
     output_dir: str,
     study_version: str,
     reset_storage: bool,
-    cv_strategy: str,      # ← 추가: 결과 디렉토리 / study name 격리용
+    cv_strategy: str,           # 결과 디렉토리 / study name 격리용
 ) -> dict:
     import pickle
     from src.tuning.optuna_runner import OptunaRunner
-    from src.evaluate import cv_evaluate, per_class_f1_report, error_examples
+    from src.evaluate import cv_evaluate, save_confusion_matrices
 
     logging.basicConfig(
         level=logging.INFO,
@@ -130,6 +135,8 @@ def run_single_model(
         df = pickle.load(f)
     with open(folds_path, "rb") as f:
         folds = pickle.load(f)
+    with open(label_encoders_path, "rb") as f:
+        label_encoders = pickle.load(f)   # {"large":LE, "medium":LE, "tag":LE}
 
     storage    = optuna_cfg.get("storage")
     study_name = _build_study_name(model_name, study_version, cv_strategy)
@@ -168,6 +175,15 @@ def run_single_model(
     # CV 전략별로 결과 디렉토리를 분리해서 저장 (덮어쓰기 방지)
     out = Path(output_dir) / cv_strategy / model_name
     out.mkdir(parents=True, exist_ok=True)
+
+    # ── Confusion Matrix (대/중/태그) 저장 — out 디렉토리 생성 이후 ──
+    save_confusion_matrices(
+        details=fold_details,
+        label_encoders=label_encoders,
+        out_dir=out,
+        model_name=model_name,
+        normalize=True,
+    )
 
     with open(out / "best_params.json", "w", encoding="utf-8") as f:
         json.dump(study_result.best_params, f, indent=2, ensure_ascii=False)
@@ -228,10 +244,10 @@ def parse_args() -> argparse.Namespace:
         default=None,   # None이면 experiment.yaml 값 사용
         choices=CV_STRATEGIES,
         help=(
-            "CV 분할 전략. 미지정 시 experiment.yaml cv.strategy 값 사용.\n"
-            "  GroupKFold           : 브랜드 기준 분리 (기본, 데이터 누수 방지)\n"
-            "  StratifiedGroupKFold : 브랜드 분리 + 클래스 비율 유지 (권장)\n"
-            "  StratifiedKFold      : 클래스 비율 유지, 브랜드 누수 가능\n"
+            "원본 fold 분할 전략 (증강은 항상 train 에만 합류).\n"
+            "  StratifiedKFold      : 클래스 비율 유지 (권장 — 브랜드 제거 파이프라인)\n"
+            "  GroupKFold           : 브랜드 기준 분리 (새 브랜드 일반화 참고 지표)\n"
+            "  StratifiedGroupKFold : 브랜드 분리 + 클래스 비율 유지\n"
             "  KFold                : 완전 랜덤, 베이스라인 비교용"
         ),
     )
@@ -273,13 +289,13 @@ def main() -> None:
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
-    # CV 전략: CLI 인수 > experiment.yaml > 기본값 순으로 결정
+    # 원본 fold 분할 전략: CLI 인수 > experiment.yaml > 기본값(StratifiedKFold)
     cv_strategy: CVStrategy = (
         args.cv_strategy
-        or cfg.get("cv", {}).get("strategy", "GroupKFold")
+        or cfg.get("cv", {}).get("strategy", "StratifiedKFold")
     )
     logger.info(
-        "실험 설정 — cv_strategy=%s, study_version=%s, reset_storage=%s",
+        "실험 설정 — cv_strategy=%s(원본 fold), 증강=train-only, study_version=%s, reset_storage=%s",
         cv_strategy, args.study_version, args.reset_storage,
     )
 
@@ -304,11 +320,10 @@ def main() -> None:
     )
     df = prep.fit_transform(df_raw)
 
-    # make_folds()에 cv_strategy 전달
-    folds = make_folds(
+    # 원본(is_augmented==0)만으로 fold 생성. 증강은 cv_evaluate 에서 train 에만 합류.
+    folds = make_folds_orig_only(
         df,
         n_splits=cfg["cv"]["n_splits"],
-        group_col=cfg["cv"]["group_col"],
         target_col=cfg["cv"].get("target_col", "large_category"),
         strategy=cv_strategy,
         seed=cfg["cv"]["seed"],
@@ -317,15 +332,18 @@ def main() -> None:
     summary   = data_summary(df)
     summary["cv_strategy"] = cv_strategy  # 리포트에 전략명 포함
 
-    # ── IPC용 임시 pickle ──
+    # ── IPC용 임시 pickle (df / folds / label_encoders) ──
     import pickle, tempfile, shutil
     tmp_dir    = Path(tempfile.mkdtemp())
     df_path    = str(tmp_dir / "df.pkl")
     folds_path = str(tmp_dir / "folds.pkl")
+    le_path    = str(tmp_dir / "label_encoders.pkl")
     with open(df_path, "wb") as f:
         pickle.dump(df, f)
     with open(folds_path, "wb") as f:
         pickle.dump(folds, f)
+    with open(le_path, "wb") as f:
+        pickle.dump(prep.label_encoders, f)   # worker(confusion matrix)에서 사용
 
     # ── 실행 모델 선택 ──
     if args.models == "all":
@@ -375,7 +393,7 @@ def main() -> None:
                 future = executor.submit(
                     run_single_model,
                     key, mname, mcls, sspace, nt,
-                    df_path, folds_path, ekwargs, optuna_cfg, args.output,
+                    df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
                     args.study_version, args.reset_storage, cv_strategy,
                 )
                 futures[future] = key
@@ -395,7 +413,7 @@ def main() -> None:
             logger.info("=== [%s] 실행 ===", key)
             r = run_single_model(
                 key, mname, mcls, sspace, nt,
-                df_path, folds_path, ekwargs, optuna_cfg, args.output,
+                df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
                 args.study_version, args.reset_storage, cv_strategy,
             )
             all_results[r["model_name"]]       = r["cv_result"]
