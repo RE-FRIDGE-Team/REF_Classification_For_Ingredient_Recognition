@@ -2,17 +2,25 @@
 RE:FRIDGE Phase 1 — 3-Model 병렬 실험 CLI 진입점.
 
 사용 예:
-    # 전체 실행 (순차)
+    # 기본 실행 (StratifiedKFold, 증강 train-only)
     python src/run_experiment.py \
-        --input product_data_collection/refined_grocery_csv_for_classification/ML_grocery_data_sampled.csv \
+        --input product_data_collection/refined_grocery_csv_for_classification/recognition_dataset_augmented.csv \
         --config configs/experiment.yaml \
         --output results/
+
+    # CV 전략 비교 실험
+    python src/run_experiment.py --input ... --cv-strategy GroupKFold
+    python src/run_experiment.py --input ... --cv-strategy StratifiedKFold
 
     # 특정 모델만
     python src/run_experiment.py --input ... --models tfidf --n-trials 10
 
     # 3모델 병렬 실행
     python src/run_experiment.py --input ... --models all --parallel
+
+    # storage 초기화
+    python src/run_experiment.py --input ... --reset-storage
+    python src/run_experiment.py --input ... --study-version v2
 """
 
 from __future__ import annotations
@@ -20,28 +28,32 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+import optuna
 import yaml
 
-# 프로젝트 루트를 PYTHONPATH에 추가 (src/ 내부에서 실행 시 필요)
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.data_utils import data_summary, load_data, make_folds
+from src.data_utils import CVStrategy, data_summary, load_data, make_folds_orig_only
 from src.preprocess import REFPreprocessor
 from src.models import (
-    TfidfLgbmClassifier,
     FastTextKonlpyClassifier,
     KoElectraMultiTaskClassifier,
+    TfidfLgbmClassifier,
 )
 from src.tuning.optuna_runner import OptunaRunner
-from src.evaluate import cv_evaluate, error_examples, per_class_f1_report
+from src.evaluate import (
+    cv_evaluate,
+    error_examples,
+    per_class_f1_report,
+    save_confusion_matrices,
+)
 from src.compare import (
     print_comparison_table,
     save_comparison_chart,
@@ -50,14 +62,43 @@ from src.compare import (
 )
 
 # ──────────────────────────────────────────────────────────────────
-# 모델 레지스트리
+# 상수
 # ──────────────────────────────────────────────────────────────────
 
 MODEL_REGISTRY = {
-    "tfidf":      ("tfidf_lgbm",  TfidfLgbmClassifier),
-    "fasttext":   ("fasttext",    FastTextKonlpyClassifier),
-    "koelectra":  ("koelectra",   KoElectraMultiTaskClassifier),
+    "tfidf":     ("tfidf_lgbm", TfidfLgbmClassifier),
+    "fasttext":  ("fasttext",   FastTextKonlpyClassifier),
+    "koelectra": ("koelectra",  KoElectraMultiTaskClassifier),
 }
+
+CV_STRATEGIES: list[CVStrategy] = [
+    "GroupKFold",
+    "StratifiedGroupKFold",
+    "StratifiedKFold",
+    "KFold",
+]
+
+
+# ──────────────────────────────────────────────────────────────────
+# Storage 관리 헬퍼
+# ──────────────────────────────────────────────────────────────────
+
+def _delete_study_if_exists(study_name: str, storage: str, logger: logging.Logger) -> None:
+    try:
+        optuna.delete_study(study_name=study_name, storage=storage)
+        logger.info("study 삭제 완료: %s", study_name)
+    except KeyError:
+        logger.info("삭제할 study 없음 (신규): %s", study_name)
+
+
+def _build_study_name(model_name: str, study_version: str, cv_strategy: str) -> str:
+    """
+    study 식별자를 생성한다.
+
+    CV 전략이 다르면 완전히 다른 study로 격리한다.
+    예: "ref_tfidf_lgbm_GroupKFold_v1"
+    """
+    return f"ref_{model_name}_{cv_strategy}_{study_version}"
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -70,30 +111,40 @@ def run_single_model(
     model_cls,
     search_space: dict,
     n_trials: int,
-    df_path: str,          # pickle 경로 (IPC용)
+    df_path: str,
     folds_path: str,
+    label_encoders_path: str,   # ← 추가: worker 는 prep 에 접근 불가하므로 pickle 로 전달
     extra_kwargs: dict,
     optuna_cfg: dict,
     output_dir: str,
+    study_version: str,
+    reset_storage: bool,
+    cv_strategy: str,           # 결과 디렉토리 / study name 격리용
 ) -> dict:
-    """
-    단일 모델의 HPO + CV 평가를 실행하고 결과 딕셔너리를 반환한다.
-    ProcessPoolExecutor worker로 실행 가능하도록 최상위 함수로 정의.
-    """
     import pickle
     from src.tuning.optuna_runner import OptunaRunner
-    from src.evaluate import cv_evaluate, per_class_f1_report, error_examples
+    from src.evaluate import cv_evaluate, save_confusion_matrices
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+    )
     logger = logging.getLogger(model_key)
 
     with open(df_path, "rb") as f:
         df = pickle.load(f)
     with open(folds_path, "rb") as f:
         folds = pickle.load(f)
+    with open(label_encoders_path, "rb") as f:
+        label_encoders = pickle.load(f)   # {"large":LE, "medium":LE, "tag":LE}
 
-    # ── HPO ──
-    logger.info("[%s] HPO 시작: %d trials", model_key, n_trials)
+    storage    = optuna_cfg.get("storage")
+    study_name = _build_study_name(model_name, study_version, cv_strategy)
+
+    if reset_storage and storage:
+        _delete_study_if_exists(study_name, storage, logger)
+
+    logger.info("[%s] HPO 시작: %d trials (study=%s)", model_key, n_trials, study_name)
     runner = OptunaRunner(
         model_name=model_name,
         model_cls=model_cls,
@@ -106,12 +157,12 @@ def run_single_model(
         n_startup_trials=optuna_cfg.get("n_startup_trials", 10),
         n_warmup_steps=optuna_cfg.get("n_warmup_steps", 2),
         timeout=optuna_cfg.get("timeout_per_model", 3600),
-        storage=optuna_cfg.get("storage"),
+        storage=storage,
         extra_kwargs=extra_kwargs,
+        study_name=study_name,
     )
     study_result = runner.run()
 
-    # ── 최적 파라미터로 CV 평가 ──
     logger.info("[%s] 최적 파라미터로 CV 평가 시작", model_key)
     cv_result, fold_details = cv_evaluate(
         model_cls=model_cls,
@@ -121,19 +172,32 @@ def run_single_model(
         folds=folds,
     )
 
-    # ── 결과 저장 ──
-    out = Path(output_dir) / model_name
+    # CV 전략별로 결과 디렉토리를 분리해서 저장 (덮어쓰기 방지)
+    out = Path(output_dir) / cv_strategy / model_name
     out.mkdir(parents=True, exist_ok=True)
+
+    # ── Confusion Matrix (대/중/태그) 저장 — out 디렉토리 생성 이후 ──
+    save_confusion_matrices(
+        details=fold_details,
+        label_encoders=label_encoders,
+        out_dir=out,
+        model_name=model_name,
+        normalize=True,
+    )
 
     with open(out / "best_params.json", "w", encoding="utf-8") as f:
         json.dump(study_result.best_params, f, indent=2, ensure_ascii=False)
 
     cv_scores = {
-        "large_f1":  cv_result.large_f1,  "large_f1_std":  cv_result.large_f1_std,
-        "medium_f1": cv_result.medium_f1, "medium_f1_std": cv_result.medium_f1_std,
-        "tag_f1":    cv_result.tag_f1,    "tag_f1_std":    cv_result.tag_f1_std,
-        "large_acc": cv_result.large_acc,
-        "train_time": cv_result.train_time,
+        "cv_strategy":   cv_strategy,
+        "large_f1":      cv_result.large_f1,
+        "large_f1_std":  cv_result.large_f1_std,
+        "medium_f1":     cv_result.medium_f1,
+        "medium_f1_std": cv_result.medium_f1_std,
+        "tag_f1":        cv_result.tag_f1,
+        "tag_f1_std":    cv_result.tag_f1_std,
+        "large_acc":     cv_result.large_acc,
+        "train_time":    cv_result.train_time,
         "infer_time_ms": cv_result.infer_time_ms,
     }
     with open(out / "cv_scores.json", "w", encoding="utf-8") as f:
@@ -159,12 +223,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="RE:FRIDGE Phase 1 — 3-Model 실험 비교"
     )
-    parser.add_argument("--input",    required=True,   help="CSV 또는 XLSX 입력 파일 경로")
-    parser.add_argument("--config",   default="configs/experiment.yaml", help="실험 설정 파일")
-    parser.add_argument("--output",   default="results/", help="결과 저장 디렉토리")
+    parser.add_argument("--input",   required=True, help="CSV 또는 XLSX 입력 파일 경로")
+    parser.add_argument("--config",  default="configs/experiment.yaml", help="실험 설정 파일")
+    parser.add_argument("--output",  default="results/", help="결과 저장 디렉토리")
     parser.add_argument(
         "--models", default="all",
-        help="실행할 모델 (all | tfidf | fasttext | koelectra | 쉼표 분리)"
+        help="실행할 모델 (all | tfidf | fasttext | koelectra | 쉼표 분리)",
     )
     parser.add_argument("--n-trials", type=int, default=None,
                         help="모델당 Optuna trial 수 (설정 파일 값 override)")
@@ -172,6 +236,35 @@ def parse_args() -> argparse.Namespace:
                         help="ProcessPoolExecutor로 3모델 동시 실행")
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+
+    # ── CV 전략 ──
+    parser.add_argument(
+        "--cv-strategy",
+        type=str,
+        default=None,   # None이면 experiment.yaml 값 사용
+        choices=CV_STRATEGIES,
+        help=(
+            "원본 fold 분할 전략 (증강은 항상 train 에만 합류).\n"
+            "  StratifiedKFold      : 클래스 비율 유지 (권장 — 브랜드 제거 파이프라인)\n"
+            "  GroupKFold           : 브랜드 기준 분리 (새 브랜드 일반화 참고 지표)\n"
+            "  StratifiedGroupKFold : 브랜드 분리 + 클래스 비율 유지\n"
+            "  KFold                : 완전 랜덤, 베이스라인 비교용"
+        ),
+    )
+
+    # ── Storage 관리 ──
+    parser.add_argument(
+        "--study-version",
+        type=str,
+        default="v1",
+        help="Optuna study name suffix. 지표/전략 변경 시 v2, v3 등으로 올려서 격리.",
+    )
+    parser.add_argument(
+        "--reset-storage",
+        action="store_true",
+        help="실행 전 해당 study의 기존 Optuna 결과를 삭제하고 trial 0부터 재시작.",
+    )
+
     return parser.parse_args()
 
 
@@ -179,6 +272,7 @@ def main() -> None:
     args = parse_args()
 
     # ── 로깅 설정 ──
+    Path(args.output).mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
@@ -189,12 +283,21 @@ def main() -> None:
             ),
         ],
     )
-    Path(args.output).mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("run_experiment")
 
     # ── 설정 로드 ──
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    # 원본 fold 분할 전략: CLI 인수 > experiment.yaml > 기본값(StratifiedKFold)
+    cv_strategy: CVStrategy = (
+        args.cv_strategy
+        or cfg.get("cv", {}).get("strategy", "StratifiedKFold")
+    )
+    logger.info(
+        "실험 설정 — cv_strategy=%s(원본 fold), 증강=train-only, study_version=%s, reset_storage=%s",
+        cv_strategy, args.study_version, args.reset_storage,
+    )
 
     # ── 데이터 로드 & 전처리 ──
     logger.info("데이터 로드: %s", args.input)
@@ -206,7 +309,10 @@ def main() -> None:
     )
 
     prep = REFPreprocessor(
-        brand_dict_path=cfg["data"].get("brand_dict_path", "product_data_collection/not_grocery_and_brand_list/grocery_brand_name.json"),
+        brand_dict_path=cfg["data"].get(
+            "brand_dict_path",
+            "product_data_collection/not_grocery_and_brand_list/grocery_brand_name.json",
+        ),
         stopwords=cfg["preprocessing"].get("stopwords", []),
         alcohol_brand_preserve=cfg["preprocessing"].get("alcohol_brand_preserve", True),
         use_parser=cfg["preprocessing"].get("use_parser", True),
@@ -214,35 +320,43 @@ def main() -> None:
     )
     df = prep.fit_transform(df_raw)
 
-    folds = make_folds(
+    # 원본(is_augmented==0)만으로 fold 생성. 증강은 cv_evaluate 에서 train 에만 합류.
+    folds = make_folds_orig_only(
         df,
         n_splits=cfg["cv"]["n_splits"],
-        group_col=cfg["cv"]["group_col"],
+        target_col=cfg["cv"].get("target_col", "large_category"),
+        strategy=cv_strategy,
         seed=cfg["cv"]["seed"],
     )
     n_classes = prep.n_classes
     summary   = data_summary(df)
+    summary["cv_strategy"] = cv_strategy  # 리포트에 전략명 포함
 
-    # ── IPC용 임시 pickle (병렬 실행 시 worker에게 데이터 전달) ──
-    import pickle, tempfile
-    tmp_dir = Path(tempfile.mkdtemp())
+    # ── IPC용 임시 pickle (df / folds / label_encoders) ──
+    import pickle, tempfile, shutil
+    tmp_dir    = Path(tempfile.mkdtemp())
     df_path    = str(tmp_dir / "df.pkl")
     folds_path = str(tmp_dir / "folds.pkl")
+    le_path    = str(tmp_dir / "label_encoders.pkl")
     with open(df_path, "wb") as f:
         pickle.dump(df, f)
     with open(folds_path, "wb") as f:
         pickle.dump(folds, f)
+    with open(le_path, "wb") as f:
+        pickle.dump(prep.label_encoders, f)   # worker(confusion matrix)에서 사용
 
     # ── 실행 모델 선택 ──
     if args.models == "all":
         selected_keys = list(MODEL_REGISTRY.keys())
     else:
-        selected_keys = [k.strip() for k in args.models.split(",") if k.strip() in MODEL_REGISTRY]
+        selected_keys = [
+            k.strip() for k in args.models.split(",")
+            if k.strip() in MODEL_REGISTRY
+        ]
 
-    optuna_cfg = cfg.get("optuna", {})
-    n_trials_map: dict = optuna_cfg.get("n_trials", {})
+    optuna_cfg   = cfg.get("optuna", {})
+    n_trials_map = optuna_cfg.get("n_trials", {})
 
-    # KoELECTRA는 n_classes 주입 필요
     extra_kwargs_map = {
         "tfidf":     {},
         "fasttext":  {},
@@ -252,11 +366,6 @@ def main() -> None:
             "n_tag":    n_classes["tag"],
         },
     }
-
-    # ── 실험 실행 ──
-    all_results:       dict = {}
-    all_study_results: dict = {}
-    all_fold_details:  dict = {}
 
     model_jobs = []
     for key in selected_keys:
@@ -269,6 +378,11 @@ def main() -> None:
             extra_kwargs_map[key],
         ))
 
+    # ── 실험 실행 ──
+    all_results:       dict = {}
+    all_study_results: dict = {}
+    all_fold_details:  dict = {}
+
     t_start = time.perf_counter()
 
     if args.parallel and len(model_jobs) > 1:
@@ -279,7 +393,8 @@ def main() -> None:
                 future = executor.submit(
                     run_single_model,
                     key, mname, mcls, sspace, nt,
-                    df_path, folds_path, ekwargs, optuna_cfg, args.output,
+                    df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
+                    args.study_version, args.reset_storage, cv_strategy,
                 )
                 futures[future] = key
 
@@ -292,13 +407,14 @@ def main() -> None:
                     all_fold_details[r["model_name"]]  = r["fold_details"]
                     logger.info("[%s] 완료: large_F1=%.4f", key, r["cv_result"].large_f1)
                 except Exception as e:
-                    logger.error("[%s] 실패: %s", key, e)
+                    logger.error("[%s] 실패: %s", key, e, exc_info=True)
     else:
         for key, mname, mcls, sspace, nt, ekwargs in model_jobs:
             logger.info("=== [%s] 실행 ===", key)
             r = run_single_model(
                 key, mname, mcls, sspace, nt,
-                df_path, folds_path, ekwargs, optuna_cfg, args.output,
+                df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
+                args.study_version, args.reset_storage, cv_strategy,
             )
             all_results[r["model_name"]]       = r["cv_result"]
             all_study_results[r["model_name"]] = r["study_result"]
@@ -307,27 +423,28 @@ def main() -> None:
     total_time = time.perf_counter() - t_start
     logger.info("전체 실험 완료: %.1f초", total_time)
 
-    # ── 비교 출력 ──
-    gate = cfg.get("gate", {}).get("large_f1_min", 0.85)
+    # ── 비교 출력 (전략별 output 하위 디렉토리에 저장) ──
+    gate       = cfg.get("gate", {}).get("large_f1_min", 0.85)
+    out_dir    = Path(args.output) / cv_strategy
 
     print_comparison_table(all_results, gate_large_f1=gate)
 
-    chart_path = str(Path(args.output) / "comparison_chart.png")
-    save_comparison_chart(all_results, chart_path, gate_large_f1=gate,
-                          dpi=cfg.get("output", {}).get("chart_dpi", 150))
+    chart_path = str(out_dir / "comparison_chart.png")
+    save_comparison_chart(
+        all_results, chart_path, gate_large_f1=gate,
+        dpi=cfg.get("output", {}).get("chart_dpi", 150),
+    )
+    save_comparison_csv(all_results, str(out_dir / "comparison_table.csv"))
 
-    save_comparison_csv(all_results, str(Path(args.output) / "comparison_table.csv"))
-
-    # per-class F1 & error examples (대분류 기준)
     le = prep.label_encoders
     per_class: dict = {}
     err_ex:    dict = {}
     for mname, details in all_fold_details.items():
         per_class[mname] = per_class_f1_report(details, le["large"], task="large")
-        err_ex[mname]    = error_examples(details, df, le["large"], n=20)
+        err_ex[mname]    = error_examples(details, df, le["large"], n=5000)
 
     if cfg.get("output", {}).get("html_report", True):
-        html_path = str(Path(args.output) / "comparison_report.html")
+        html_path = str(out_dir / "comparison_report.html")
         save_html_report(
             results=all_results,
             study_results=all_study_results,
@@ -340,8 +457,6 @@ def main() -> None:
         )
         logger.info("리포트: %s", html_path)
 
-    # 임시 파일 정리
-    import shutil
     shutil.rmtree(tmp_dir, ignore_errors=True)
 
 

@@ -61,6 +61,8 @@ class OptunaRunner:
         n_warmup_steps:   Pruner warm-up fold 수
         timeout:      최대 탐색 시간 (초, None=무제한)
         storage:      Optuna DB URI (None=메모리)
+        study_name:   study 식별자 (None이면 "ref_{model_name}"으로 자동 생성)
+                      지표 변경 시 suffix를 바꿔 격리 (예: "ref_tfidf_lgbm_v2")
     """
 
     def __init__(
@@ -77,7 +79,8 @@ class OptunaRunner:
         n_warmup_steps: int = 2,
         timeout: float | None = 3600.0,
         storage: str | None = None,
-        extra_kwargs: dict | None = None,   # 모델 생성자 추가 인수
+        extra_kwargs: dict | None = None,
+        study_name: str | None = None,      # ← 추가: 외부에서 study 이름 주입
     ) -> None:
         self._model_name      = model_name
         self._model_cls       = model_cls
@@ -88,6 +91,9 @@ class OptunaRunner:
         self._timeout         = timeout
         self._storage         = storage
         self._extra_kwargs    = extra_kwargs or {}
+
+        # study_name: 외부 주입 우선, 없으면 기본값
+        self._study_name = study_name or f"ref_{model_name}"
 
         # Sampler
         match sampler:
@@ -115,16 +121,18 @@ class OptunaRunner:
 
     def run(self) -> StudyResult:
         """Optuna study를 실행하고 StudyResult를 반환한다."""
-        study_name = f"ref_{self._model_name}"
         study = optuna.create_study(
-            study_name=study_name,
+            study_name=self._study_name,     # ← 하드코딩 제거, 주입된 이름 사용
             direction="maximize",
             sampler=self._sampler,
             pruner=self._pruner,
             storage=self._storage,
-            load_if_exists=True,         # 중단 후 재개 지원
+            load_if_exists=True,
         )
-        logger.info("[%s] Optuna study 시작: %d trials", self._model_name, self._n_trials)
+        logger.info(
+            "[%s] Optuna study 시작: %d trials (study_name=%s)",
+            self._model_name, self._n_trials, self._study_name,
+        )
 
         study.optimize(
             self._objective,

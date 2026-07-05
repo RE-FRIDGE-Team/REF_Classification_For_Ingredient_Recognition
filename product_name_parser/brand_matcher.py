@@ -38,6 +38,9 @@ class AhoCorasickBrandMatcher(REFBrandMatcher):
     Aho-Corasick 알고리즘을 사용한 브랜드명 매칭 구현체.
     Java의 Aho-Corasick 기반 REFBrandMatcher 구현에 대응.
 
+    빈 브랜드 사전으로 초기화하면 find_match()가 항상 None을 반환한다.
+    (술 카테고리용 parser_no_brand 생성 시 사용)
+
     Usage:
         brands = ["CJ", "풀무원", "오뚜기", "농심", "삼양"]
         matcher = AhoCorasickBrandMatcher(brands)
@@ -51,20 +54,35 @@ class AhoCorasickBrandMatcher(REFBrandMatcher):
                 "pyahocorasick 라이브러리가 필요합니다.\n"
                 "설치: pip install pyahocorasick"
             )
-        self._automaton = self._build_automaton(brand_names)
+        self._automaton, self._is_empty = self._build_automaton(brand_names)
 
     @staticmethod
-    def _build_automaton(brand_names: Iterable[str]) -> "ahocorasick.Automaton":
+    def _build_automaton(brand_names: Iterable[str]):
+        """
+        Automaton을 빌드한다.
+
+        브랜드 사전이 비어 있으면 make_automaton()을 호출하지 않고
+        is_empty=True 를 반환한다. (빈 Automaton에 make_automaton()을
+        호출하면 iter() 시 AttributeError 발생)
+        """
         A = ahocorasick.Automaton()
+        added = 0
         for idx, brand in enumerate(brand_names):
             if brand:
                 A.add_word(brand, (idx, brand))
+                added += 1
+
+        if added == 0:
+            # 빈 사전: Automaton 미완성 상태로 두고 is_empty 플래그로 관리
+            return A, True
+
         A.make_automaton()
-        return A
+        return A, False
 
     def find_match(self, text: str) -> Optional[str]:
         """텍스트에서 첫 번째로 등장하는 브랜드명을 반환한다."""
-        if not text:
+        # 빈 사전이면 항상 None (술 카테고리용 parser_no_brand 동작)
+        if self._is_empty or not text:
             return None
 
         best: Optional[str] = None
@@ -80,7 +98,7 @@ class AhoCorasickBrandMatcher(REFBrandMatcher):
 
     def find_all_matches(self, text: str) -> list[str]:
         """텍스트에서 매칭된 모든 브랜드명을 등장 순서대로 반환한다."""
-        if not text:
+        if self._is_empty or not text:
             return []
         matches = []
         for end_idx, (_, brand) in self._automaton.iter(text):
@@ -118,6 +136,9 @@ def create_brand_matcher(brand_names: Iterable[str]) -> REFBrandMatcher:
     """
     환경에 따라 적합한 브랜드 매처를 자동 생성한다.
     pyahocorasick 설치 여부에 따라 구현체를 선택한다.
+
+    빈 brand_names를 넘기면 find_match()가 항상 None을 반환하는
+    매처가 생성된다. (술 카테고리용 parser_no_brand 생성 시 활용)
     """
     if _AHO_AVAILABLE:
         return AhoCorasickBrandMatcher(brand_names)

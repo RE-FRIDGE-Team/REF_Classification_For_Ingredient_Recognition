@@ -1,18 +1,37 @@
 """
-데이터 로드 및 GroupKFold 분할 유틸리티.
+데이터 로드 및 KFold 분할 유틸리티.
 
 CSV / XLSX 파일을 읽어 표준 스키마로 정규화하고,
-brand 컬럼 기준 5-Fold GroupKFold 인덱스를 반환한다.
+experiment.yaml cv.strategy 에 따라 Fold 인덱스를 반환한다.
+
+변경점(2026-xx):
+  1. load_data 가 is_augmented 컬럼을 유지 (없으면 "0" 으로 채워 원본 취급).
+  2. make_folds_orig_only 추가 — 원본(is_augmented==0)만으로 fold 생성.
+     증강은 fold split 에 넣지 않고, cv_evaluate 에서 train 에만 합류시킨다.
+
+지원 전략:
+    GroupKFold           - 브랜드 기준 분리 (데이터 누수 방지)
+    StratifiedGroupKFold - 브랜드 기준 분리 + 클래스 비율 유지
+    StratifiedKFold      - 클래스 비율만 유지 (브랜드 분리 없음)
+    KFold                - 순수 랜덤 (비교 베이스라인용)
 """
 
 import logging
 from pathlib import Path
-from typing import Iterator, Tuple
+from typing import Literal, Tuple
 
+import numpy as np
 import pandas as pd
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import (
+    GroupKFold,
+    KFold,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+)
 
 logger = logging.getLogger(__name__)
+
+CVStrategy = Literal["GroupKFold", "StratifiedGroupKFold", "StratifiedKFold", "KFold"]
 
 
 def load_data(
@@ -24,17 +43,10 @@ def load_data(
     """
     CSV 또는 XLSX 파일을 읽어 표준 컬럼명으로 반환한다.
 
-    Args:
-        input_path:    CSV 또는 XLSX 경로
-        col_map:       experiment.yaml data.input_columns 딕셔너리
-                       {"product_name": "실제컬럼명", ...}
-        exclude_large: 제외할 대분류 값 목록
-        exclude_tag:   제외할 카테고리태그 값 목록
-
     Returns:
         DataFrame with columns:
             product_name, large_category, medium_category,
-            category_tag, brand_name
+            category_tag, brand_name, is_augmented
     """
     path = Path(input_path)
     if not path.exists():
@@ -45,7 +57,7 @@ def load_data(
         df = pd.read_excel(path, dtype=str)
         logger.info("XLSX 로드: %s (%d행)", path.name, len(df))
     elif suffix == ".csv":
-        df = pd.read_csv(path, dtype=str)
+        df = pd.read_csv(path, dtype=str, encoding="utf-8")   # utf-8 로 읽음
         logger.info("CSV 로드: %s (%d행)", path.name, len(df))
     else:
         raise ValueError(f"지원하지 않는 파일 형식: {suffix}. CSV 또는 XLSX만 허용.")
@@ -58,15 +70,23 @@ def load_data(
 
     df = df.rename(columns=reverse_map)
 
-    # 표준 컬럼만 선택
-    keep = ["product_name", "large_category", "medium_category", "category_tag", "brand_name"]
+    # is_augmented 는 col_map 에 없어도 CSV 에 있으면 그대로 유지된다.
+    # 없으면(구버전 CSV) 전부 원본("0")으로 채운다.
+    if "is_augmented" not in df.columns:
+        df["is_augmented"] = "0"
+        logger.warning("is_augmented 컬럼이 없어 전부 원본(0)으로 처리합니다.")
+
+    # 표준 컬럼만 선택 (is_augmented 포함)
+    keep = ["product_name", "large_category", "medium_category",
+            "category_tag", "brand_name", "is_augmented"]
     df = df[[c for c in keep if c in df.columns]].copy()
 
-    # 결측치 제거
+    # 결측치 처리
     before = len(df)
     df = df.dropna(subset=["product_name", "large_category", "medium_category"])
-    df["brand_name"] = df["brand_name"].fillna("unknown")
-    df["category_tag"] = df["category_tag"].fillna("UNKNOWN")
+    df["brand_name"]    = df["brand_name"].fillna("unknown")
+    df["category_tag"]  = df["category_tag"].fillna("UNKNOWN")
+    df["is_augmented"]  = df["is_augmented"].fillna("0").astype(str)
     logger.info("결측치 제거: %d행 → %d행", before, len(df))
 
     # 제외 카테고리 필터
@@ -76,53 +96,179 @@ def load_data(
         df = df[~df["category_tag"].isin(exclude_tag)]
 
     df = df.reset_index(drop=True)
-    logger.info("최종 학습 데이터: %d행, 대분류 %d종, 중분류 %d종, 태그 %d종",
-                len(df),
-                df["large_category"].nunique(),
-                df["medium_category"].nunique(),
-                df["category_tag"].nunique())
+
+    n_orig = int((df["is_augmented"] == "0").sum())
+    n_aug  = int((df["is_augmented"] == "1").sum())
+    logger.info(
+        "최종 학습 데이터: %d행 (원본 %d / 증강 %d), 대분류 %d종, 중분류 %d종, 태그 %d종",
+        len(df), n_orig, n_aug,
+        df["large_category"].nunique(),
+        df["medium_category"].nunique(),
+        df["category_tag"].nunique(),
+    )
     return df
 
+
+# ──────────────────────────────────────────────────────────────────
+# CV 전략 팩토리
+# ──────────────────────────────────────────────────────────────────
 
 def make_folds(
     df: pd.DataFrame,
     n_splits: int = 5,
     group_col: str = "brand_name",
+    target_col: str = "large_category",
+    strategy: CVStrategy = "GroupKFold",
     seed: int = 42,
 ) -> list[Tuple[list[int], list[int]]]:
     """
-    GroupKFold로 (train_idx, val_idx) 쌍 목록을 반환한다.
-
-    Args:
-        df:        load_data() 반환 DataFrame
-        n_splits:  Fold 수
-        group_col: 그룹 기준 컬럼 (브랜드 기준 데이터 누수 방지)
-        seed:      재현성 시드 (GroupKFold는 내부적으로 미사용; 문서 목적)
-
-    Returns:
-        List of (train_indices, val_indices)
+    (참고용/구버전) 전체 df 로 CV fold 를 만든다.
+    증강 train-only 실험에는 make_folds_orig_only 를 사용할 것.
     """
     groups = df[group_col].values
-    gkf = GroupKFold(n_splits=n_splits)
+    y      = df[target_col].values
+
+    splitter = _make_splitter(strategy, n_splits, seed)
+    split_kwargs = _make_split_kwargs(strategy, df, groups, y)
+
     folds: list[Tuple[list[int], list[int]]] = []
-    for fold_idx, (tr, va) in enumerate(gkf.split(df, groups=groups)):
+    for fold_idx, (tr, va) in enumerate(splitter.split(**split_kwargs)):
         folds.append((tr.tolist(), va.tolist()))
         logger.debug(
-            "Fold %d — train: %d, val: %d, val 그룹 수: %d",
-            fold_idx + 1, len(tr), len(va),
-            len(set(groups[va]))
+            "[%s] Fold %d — train: %d, val: %d, val 브랜드 수: %d, val 클래스 수: %d",
+            strategy, fold_idx + 1, len(tr), len(va),
+            len(set(groups[va])), len(set(y[va])),
         )
+
+    _log_fold_summary(strategy, folds, groups, y)
     return folds
+
+
+def make_folds_orig_only(
+    df: pd.DataFrame,
+    n_splits: int = 5,
+    target_col: str = "large_category",
+    group_col: str = "brand_name",
+    strategy: CVStrategy = "StratifiedKFold",
+    seed: int = 42,
+) -> list[Tuple[list[int], list[int]]]:
+    """
+    원본(is_augmented=="0")만으로 fold 를 만든다. 증강은 split 에 넣지 않는다.
+    반환하는 인덱스는 '전체 df 기준 위치 인덱스'라 df.iloc 에 그대로 쓸 수 있다.
+
+    strategy:
+      - "StratifiedKFold"     : 클래스 비율만 유지 (권장 — 원본만 나누므로 브랜드 그룹 불필요)
+      - "GroupKFold"          : 브랜드로 분리 (원본만이라 unknown 붕괴 없음)
+      - "StratifiedGroupKFold": 브랜드 분리 + 클래스 비율
+      - "KFold"               : 순수 랜덤
+    """
+    if "is_augmented" not in df.columns:
+        logger.warning("is_augmented 없음 → 전체 df 로 fold 생성(= make_folds 와 동일).")
+        orig_pos = np.arange(len(df))
+    else:
+        orig_pos = np.where(df["is_augmented"].astype(str) == "0")[0]
+
+    orig   = df.iloc[orig_pos]
+    y      = orig[target_col].values
+    groups = orig[group_col].values if group_col in orig.columns else None
+
+    splitter = _make_splitter(strategy, n_splits, seed)
+
+    folds: list[Tuple[list[int], list[int]]] = []
+    if strategy == "GroupKFold":
+        it = splitter.split(orig_pos, groups=groups)
+    elif strategy == "StratifiedGroupKFold":
+        it = splitter.split(orig_pos, y=y, groups=groups)
+    elif strategy == "StratifiedKFold":
+        it = splitter.split(orig_pos, y=y)
+    else:  # KFold
+        it = splitter.split(orig_pos)
+
+    for fold_idx, (tr_local, va_local) in enumerate(it):
+        # local(orig 내부) 인덱스 → 전체 df 위치 인덱스로 환원
+        tr_global = orig_pos[tr_local].tolist()
+        va_global = orig_pos[va_local].tolist()
+        folds.append((tr_global, va_global))
+        logger.debug(
+            "[orig-only/%s] Fold %d — 원본 train: %d, valid: %d, valid 클래스: %d",
+            strategy, fold_idx + 1, len(tr_global), len(va_global), len(set(y[va_local])),
+        )
+
+    n_orig = len(orig_pos)
+    logger.info("[orig-only/%s] %d-Fold 구성 완료 (원본 %d행 기준, 증강은 train 에서만 합류)",
+                strategy, n_splits, n_orig)
+    return folds
+
+
+def _make_splitter(strategy: CVStrategy, n_splits: int, seed: int):
+    match strategy:
+        case "GroupKFold":
+            return GroupKFold(n_splits=n_splits)
+        case "StratifiedGroupKFold":
+            return StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        case "StratifiedKFold":
+            return StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        case "KFold":
+            return KFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        case _:
+            raise ValueError(
+                f"지원하지 않는 CV 전략: '{strategy}'. "
+                f"선택 가능: GroupKFold, StratifiedGroupKFold, StratifiedKFold, KFold"
+            )
+
+
+def _make_split_kwargs(strategy: CVStrategy, df: pd.DataFrame, groups, y) -> dict:
+    X = df
+    match strategy:
+        case "GroupKFold":
+            return {"X": X, "groups": groups}
+        case "StratifiedGroupKFold":
+            return {"X": X, "y": y, "groups": groups}
+        case "StratifiedKFold":
+            return {"X": X, "y": y}
+        case "KFold":
+            return {"X": X}
+        case _:
+            return {"X": X}
+
+
+def _log_fold_summary(strategy, folds, groups, y) -> None:
+    val_sizes    = [len(va) for _, va in folds]
+    val_brands   = [len(set(groups[va])) for _, va in folds]
+    val_classes  = [len(set(y[va])) for _, va in folds]
+    total_classes = len(set(y))
+
+    logger.info(
+        "[%s] %d-Fold 구성 완료\n  val 크기: %s (mean=%.0f)\n"
+        "  val 브랜드 수: %s\n  val 클래스 수: %s / 전체 %d",
+        strategy, len(folds), val_sizes, np.mean(val_sizes),
+        val_brands, val_classes, total_classes,
+    )
+    if strategy == "KFold":
+        logger.warning("[KFold] 브랜드 분리 없음 — 누수로 낙관적 측정 가능. 베이스라인 비교용만 권장.")
+    if strategy == "StratifiedKFold":
+        logger.warning("[StratifiedKFold] 클래스 비율 유지, 브랜드 누수 가능(원본만 나누면 영향 작음).")
+    if strategy == "GroupKFold":
+        missing_cls = [
+            f"Fold {i+1}: {total_classes - c}개 누락"
+            for i, (_, va) in enumerate(folds)
+            if (c := len(set(y[va]))) < total_classes
+        ]
+        if missing_cls:
+            logger.warning("[GroupKFold] val 클래스 누락 — %s. StratifiedGroupKFold 전환 권장.",
+                           ", ".join(missing_cls))
 
 
 def data_summary(df: pd.DataFrame) -> dict:
     """학습 데이터 통계 요약 딕셔너리 반환 (HTML 리포트용)."""
     return {
         "n_samples": len(df),
-        "n_large": df["large_category"].nunique(),
-        "n_medium": df["medium_category"].nunique(),
-        "n_tag": df["category_tag"].nunique(),
-        "n_brands": df["brand_name"].nunique(),
+        "n_orig":    int((df.get("is_augmented", pd.Series(["0"] * len(df))).astype(str) == "0").sum()),
+        "n_aug":     int((df.get("is_augmented", pd.Series(["0"] * len(df))).astype(str) == "1").sum()),
+        "n_large":   df["large_category"].nunique(),
+        "n_medium":  df["medium_category"].nunique(),
+        "n_tag":     df["category_tag"].nunique(),
+        "n_brands":  df["brand_name"].nunique(),
         "large_dist": df["large_category"].value_counts().to_dict(),
-        "tag_dist": df["category_tag"].value_counts().to_dict(),
+        "tag_dist":   df["category_tag"].value_counts().to_dict(),
     }

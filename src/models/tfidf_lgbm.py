@@ -56,6 +56,7 @@ class TfidfLgbmClassifier(BaseClassifier):
         subsample: float = 0.8,
         reg_alpha: float = 0.01,
         reg_lambda: float = 0.01,
+        class_weight: str | None = "balanced",
         seed: int = 42,
     ) -> None:
         if not _LGB_AVAILABLE:
@@ -78,17 +79,21 @@ class TfidfLgbmClassifier(BaseClassifier):
             subsample=subsample,
             reg_alpha=reg_alpha,
             reg_lambda=reg_lambda,
+            class_weight=class_weight,
             random_state=seed,
             n_jobs=-1,
             verbose=-1,
         )
 
         # 내부 컴포넌트 (fit 후 할당)
-        self._vec_refined: TfidfVectorizer | None = None
-        self._vec_nouns:   TfidfVectorizer | None = None
-        self._clf_large:   lgb.LGBMClassifier | None = None
-        self._clf_medium:  lgb.LGBMClassifier | None = None
-        self._clf_tag:     lgb.LGBMClassifier | None = None
+        self._vec_refined:    TfidfVectorizer | None = None
+        self._vec_nouns:      TfidfVectorizer | None = None
+        
+        self._clf_large:      lgb.LGBMClassifier | None = None
+
+        self._clf_medium_map: dict[str, lgb.LGBMClassifier] = {}    # 대분류 별 중분류 모델
+
+        self._tag_map:        dict[str, str] = {} # 중분류 별 태그 매핑
 
     # ──────────────────────────────────────────────────────────────
     # BaseClassifier 구현
@@ -115,14 +120,39 @@ class TfidfLgbmClassifier(BaseClassifier):
         X   = hstack([X_r, X_n])
 
         logger.debug("TF-IDF 피처 차원: %s", X.shape)
+        
+        # 대분류
+        
 
         self._clf_large  = lgb.LGBMClassifier(**self._lgbm_params)
-        self._clf_medium = lgb.LGBMClassifier(**self._lgbm_params)
-        self._clf_tag    = lgb.LGBMClassifier(**self._lgbm_params)
-
         self._clf_large.fit(X, y_large)
-        self._clf_medium.fit(X, y_medium)
-        self._clf_tag.fit(X, y_tag)
+
+        # 대분류 별 중분류
+        label_df = pd.DataFrame({
+            "large": y_large,
+            "medium": y_medium,
+            "tag": y_tag
+        })
+
+        for large_val, group in label_df.groupby("large"):
+            idx = group.index # 해당 대분류의 행 번호들 (예: 삼겹살-0, 소고기-1, 새우-2, 상추-3, 오리고기-4 라고 했을 떄 groupby 로 육류/계란 그룹만 뽑으면 idx[0,1,4])
+            X_sub = X[idx] # 전체 X 에서 그 행번호에 해당하는 행만 추출(부분 집합)
+
+
+            clf = lgb.LGBMClassifier(**self._lgbm_params)
+            clf.fit(X_sub, group["medium"].values)
+
+            self._clf_medium_map[large_val] = clf
+
+        # 태그 매핑 테이블
+        self._tag_map = (
+            label_df.groupby("medium")["tag"]
+            .agg(lambda x: x.value_counts().index[0])
+            .to_dict()
+        )
+
+        print("medium_map 키:", list(self._clf_medium_map.keys()))
+        
 
     def predict(
         self,
@@ -136,11 +166,36 @@ class TfidfLgbmClassifier(BaseClassifier):
                 message="X does not have valid feature names",
                 category=UserWarning,
             )
+            # 대분류 예측
+            large_pred = self._clf_large.predict(X)
+
+            # 대분류 결과에 따른 중분류 모델만 호출
+            # 변경 포인트: 빈 배열 대신 초기값을 "UNKNOWN"으로 채운 고정 크기 배열 생성
+            medium_pred = np.full(len(large_pred), -1, dtype=np.int64)
+            
+            for large_val, clf in self._clf_medium_map.items():
+                mask = (large_pred == large_val)  # 이 대분류로 예측된 샘플만
+                
+                if not mask.any():
+                    continue
+
+                enc = clf.predict(X[mask])
+                medium_pred[mask] = enc
+
+            # 태그는 딕셔너리 조회하기
+            tag_pred = np.array([
+                self._tag_map.get(int(m), "UNKNOWN") for m in medium_pred # get(찾을 키, 키가 없으면 반환할 값)
+            ])
+
+            print("large_pred 샘플:", large_pred[:5])
+            print("large_pred 타입:", type(large_pred[0]))
+
             return (
-                self._clf_large.predict(X),
-                self._clf_medium.predict(X),
-                self._clf_tag.predict(X),
+                large_pred,
+                medium_pred,
+                tag_pred
             )
+
 
 
     def predict_proba(
@@ -155,11 +210,31 @@ class TfidfLgbmClassifier(BaseClassifier):
                 message="X does not have valid feature names",
                 category=UserWarning,
             )
+
+            # 대분류
+            large_proba = self._clf_large.predict_proba(X)
+            large_pred = large_proba.argmax(axis=1) # 가장 큰 값의 컬럼 인덱스를 반환
+            
+            
+            # 중분류 - 샘플별 해당 대분류 모델의 proba 만
+            medium_proba = [None] * len(large_pred) # None 을 N 개 가지는 리스트를 만들기. 나중에 각 인덱스에서 확률 벡터를 채우기 위함
+
+            for large_val, clf in self._clf_medium_map.items():
+                mask = (large_pred == large_val)  # 이 대분류로 예측된 샘플만
+                
+                if not mask.any():
+                    continue
+                
+                proba_sub = clf.predict_proba(X[mask]) # shape: (해당샘플수, 해당중분류수)
+
+                for local_i, global_i in enumerate(np.where(mask)[0]):
+                    medium_proba[global_i] = proba_sub[local_i]
+
+
             return (
-                self._clf_large.predict_proba(X),
-                self._clf_medium.predict_proba(X),
-                self._clf_tag.predict_proba(X),
-            )
+                large_proba,
+                medium_proba
+            )   
 
     def get_params(self) -> dict:
         return {**self._tfidf_params, **self._lgbm_params}
