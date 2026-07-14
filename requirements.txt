@@ -2,15 +2,18 @@
 torch>=2.3.0
 transformers>=4.40.0
 sentencepiece>=0.2.0       # KoBERT 토크나이저 필수
-scikit-learn>=1.4.0
+scikit-learn>=1.4.0        # LinearSVC(dual="auto")·ComplementNB 등 모델 다양화에 사용
 faiss-cpu>=1.8.0           # Phase 2 임베딩 검색용
 numpy>=1.26.0
 pandas>=2.2.0
 pyyaml>=6.0.0
+scipy>=1.12.0              # sparse hstack / softmax (features.py, text_classifier.py)
 
 # ── 한국어 NLP ───────────────────────────
 pyahocorasick>=2.0.0
-konlpy>=0.6.0
+python-mecab-ko>=1.3.0     # ★신규 기본 형태소 분석기 (pip 단독 설치, 시스템 mecab 불필요)
+                           #   사용자사전: python -m mecab dict-index (preprocess.py 가 자동 수행)
+konlpy>=0.6.0              # Okt 하위 호환용 (--morpheme okt). JDK 필요 — Docker 이미지에 포함
 JPype1>=1.4.1
 
 # ── 시각화 / EDA (notebooks 전용) ────────
@@ -24,11 +27,11 @@ wordcloud>=1.9.0
 
 # ── ML 모델 (Phase 1 실험 비교) ──────────────────────────────────
 lightgbm>=4.3.0
-gensim>=4.3.0             # FastText 임베딩
-optuna>=3.6.0             # 하이퍼파라미터 최적화
+optuna>=3.6.0              # 하이퍼파라미터 최적화
+# gensim 제거됨 — FastText 모델 삭제 (char n-gram TF-IDF 와 사실상 중복, 마진 없음)
 
 # ── 출력 / 리포트 ─────────────────────────────────────────────────
-rich>=13.7.0              # 터미널 컬러 표
+rich>=13.7.0               # 터미널 컬러 표
 
 # ── 개발 / 테스트 ────────────────────────
 pytest>=8.0.0

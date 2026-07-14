@@ -1,9 +1,17 @@
 # ═══════════════════════════════════════════════════════════════════
-# RE:FRIDGE ML — Dockerfile
+# RE:FRIDGE ML — Dockerfile (2026-07 개편)
 #
-# 목적: JPype1 / KoNLPy를 위한 JDK 내장 Python 환경
+# 목적: JPype1 / KoNLPy(Okt 하위호환) + python-mecab-ko 를 위한 Python 환경
 # 베이스: python:3.11-slim (multi-arch: linux/amd64 + linux/arm64)
 #         → Mac M2 Pro(arm64) / Windows(amd64) 모두 자동 대응
+#
+# [2026-07 변경점]
+#   - python-mecab-ko 추가 (requirements.txt 경유 pip 설치).
+#     * amd64/arm64 모두 PyPI 휠 제공 — 별도 시스템 mecab 설치 불필요.
+#     * 휠이 없는 플랫폼에서 소스 빌드로 폴백할 때를 대비해 cmake 추가
+#       (build-essential 은 기존부터 포함).
+#   - gensim(FastText) 제거는 requirements.txt 에서 반영됨.
+#   - default-jdk 는 유지: --morpheme okt 하위 호환 실험용 (KoNLPy).
 #
 # PyCharm 연결:
 #   Settings → Python Interpreter → Add → Docker Compose
@@ -16,13 +24,16 @@ FROM python:3.11-slim
 # default-jdk : JPype1 / KoNLPy 런타임 (arm64·amd64 모두 OpenJDK 17)
 # fonts-nanum : 한국어 matplotlib 폰트
 # git         : pip git+ 패키지 설치용
-# build-essential, curl : 일부 C 확장 컴파일 및 헬스체크
+# build-essential, cmake : C/C++ 확장 컴파일 (python-mecab-ko 소스 빌드 폴백 대비)
+# curl, wget  : 헬스체크 / 파일 다운로드
 RUN apt-get update && apt-get install -y --no-install-recommends \
     default-jdk \
     fonts-nanum \
     git \
     build-essential \
+    cmake \
     curl \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Java 환경 변수 ───────────────────────────────────────────────────
@@ -41,11 +52,11 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt
 
+# ── Mecab 설치 self-check (빌드 시점에 조기 발견) ────────────────────
+RUN python -c "from mecab import MeCab; print('mecab OK:', MeCab().morphs('냉동 만두'))"
+
 # ── Jupyter 커널 등록 (notebooks/ 사용 시) ──────────────────────────
-RUN python -m ipykernel install --name refridge --display-name "RE:FRIDGE (KoNLPy)"
-
-RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
-
+RUN python -m ipykernel install --name refridge --display-name "RE:FRIDGE (Mecab)"
 
 # ── 기본 CMD: PyCharm Docker 인터프리터 연결 시 컨테이너 유지 ────────
 # docker-compose의 각 서비스가 command로 override함
