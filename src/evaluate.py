@@ -173,15 +173,29 @@ def cv_evaluate(
 # ──────────────────────────────────────────────────────────────
 
 def _set_korean_font() -> None:
-    """matplotlib 한글 폰트 설정 (환경에 있는 것 중 첫 번째 사용)."""
+    """
+    matplotlib 한글 폰트 설정.
+
+    ★수정(2026-07): 기존 코드는 matplotlib.rc(font, family=...)가 폰트 부재 시
+    예외를 던진다고 가정했지만, rc()는 검증 없이 항상 성공한다(경고는 렌더링
+    시점에 발생). 그래서 폴백 루프가 무의미하게 첫 항목(Malgun Gothic —
+    Windows 전용)에서 멈췄고, Linux 컨테이너에서 findfont WARNING 이 반복됐다.
+    → font_manager 로 '실제 설치된' 폰트 목록을 조회해 존재하는 것만 채택한다.
+    우선순위: NanumGothic(Docker 이미지 fonts-nanum) → Noto CJK →
+              AppleGothic(Mac 로컬) → Malgun Gothic(Windows 로컬).
+    """
     import matplotlib
-    for fam in ["Malgun Gothic", "AppleGothic", "NanumGothic",
-                "Noto Sans CJK KR", "Noto Sans KR"]:
-        try:
+    from matplotlib import font_manager as fm
+
+    installed = {f.name for f in fm.fontManager.ttflist}
+    for fam in ["NanumGothic", "Noto Sans CJK KR", "Noto Sans CJK JP",
+                "Noto Sans KR", "AppleGothic", "Malgun Gothic"]:
+        if fam in installed:                     # 실제 존재하는 폰트만 채택
             matplotlib.rc("font", family=fam)
             break
-        except Exception:
-            continue
+    else:                                        # 한글 폰트가 전무한 환경
+        logger.warning("한글 폰트 미발견 — 차트 한글이 깨질 수 있습니다. "
+                       "(Docker: apt install fonts-nanum)")
     matplotlib.rcParams["axes.unicode_minus"] = False
 
 
