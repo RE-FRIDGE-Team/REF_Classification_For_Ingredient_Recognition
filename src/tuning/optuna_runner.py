@@ -224,103 +224,96 @@ class OptunaRunner:
     # 파라미터 샘플링 (모델별 search_space → Optuna suggest_*)
     # ──────────────────────────────────────────────────────────────
 
+    # ──────────────────────────────────────────────────────────────
+    # 파라미터 샘플링 (2026-07 개편)
+    #
+    # 탐색 공간이 3개 그룹으로 확장됨:
+    #   feature : char/word n-gram · head-noun 가중 (FeatureConfig 필드)
+    #   clf     : ★모델 종류(model_type_large/medium) · C · class_weight
+    #   lgbm    : LightGBM 전용 (어느 헤드든 lgbm/ensemble 을 고른 trial 만 샘플링
+    #             → Optuna define-by-run 조건부 공간으로 낭비 차원 제거)
+    #
+    # FastText / KoELECTRA 전용 공간은 제거됨:
+    #   - FastText 모델 자체가 삭제됨 (char n-gram 과 사실상 중복)
+    #   - KoELECTRA 는 술 OOV 구제 후순위 옵션으로만 남아 HPO 대상에서 제외
+    # ──────────────────────────────────────────────────────────────
+
     def _suggest_params(self, trial: optuna.Trial) -> dict:
-        """experiment.yaml search_space 딕셔너리를 Optuna API로 변환."""
+        """experiment.yaml search_space 딕셔너리를 Optuna suggest_* 호출로 변환한다."""
         params: dict = {}
         sp = self._search_space
 
-        # ── TF-IDF 공간 ──
-        if "tfidf" in sp:
-            t = sp["tfidf"]
-            if "ngram_range" in t:
-                choice = trial.suggest_categorical("ngram_range_idx", list(range(len(t["ngram_range"]))))
-                params["ngram_range"] = tuple(t["ngram_range"][choice])
-            if "max_features" in t:
-                params["max_features"] = trial.suggest_int("max_features", *t["max_features"], log=True)
-            if "min_df" in t:
-                params["min_df"] = trial.suggest_int("min_df", *t["min_df"])
-            if "sublinear_tf" in t:
-                params["sublinear_tf"] = trial.suggest_categorical("sublinear_tf", t["sublinear_tf"])
+        # ── 피처 공간 (feature) ──
+        if "feature" in sp:
+            fe = sp["feature"]
+            if "char_ngram_range" in fe:
+                # [[2,4],[2,5],[3,5]] 형태의 후보 목록에서 인덱스로 선택
+                i = trial.suggest_categorical(
+                    "char_ngram_idx", list(range(len(fe["char_ngram_range"])))
+                )
+                params["char_ngram_range"] = tuple(fe["char_ngram_range"][i])
+            if "max_features" in fe:
+                params["max_features"] = trial.suggest_int("max_features", *fe["max_features"], log=True)
+            if "min_df" in fe:
+                params["min_df"] = trial.suggest_int("min_df", *fe["min_df"])
+            if "sublinear_tf" in fe:
+                params["sublinear_tf"] = trial.suggest_categorical("sublinear_tf", fe["sublinear_tf"])
+            if "word_ngram_range" in fe:
+                i = trial.suggest_categorical(
+                    "word_ngram_idx", list(range(len(fe["word_ngram_range"])))
+                )
+                params["word_ngram_range"] = tuple(fe["word_ngram_range"][i])
+            if "word_max_features" in fe:
+                params["word_max_features"] = trial.suggest_int(
+                    "word_max_features", *fe["word_max_features"], log=True
+                )
+            if "head_weight" in fe:
+                params["head_weight"] = trial.suggest_float("head_weight", *fe["head_weight"])
 
-        # ── LightGBM 공간 ──
-        if "lgbm" in sp:
+        # ── 분류기 선택 공간 (clf) — ★헤드별 베스트 모델 탐색 ──
+        need_lgbm = False       # lgbm/ensemble 이 선택된 경우에만 LGBM 공간 샘플링
+        need_c    = False       # 선형 계열이 선택된 경우에만 C 샘플링
+        if "clf" in sp:
+            cl = sp["clf"]
+            if "model_type" in cl:
+                # 대분류/중분류 헤드가 서로 다른 모델을 가질 수 있다
+                params["model_type_large"] = trial.suggest_categorical(
+                    "model_type_large", cl["model_type"]
+                )
+                params["model_type_medium"] = trial.suggest_categorical(
+                    "model_type_medium", cl["model_type"]
+                )
+                chosen = {params["model_type_large"], params["model_type_medium"]}
+                need_lgbm = bool(chosen & {"lgbm", "ensemble"})
+                need_c    = bool(chosen & {"linearsvc", "logreg", "ensemble"})
+            if "C" in cl and need_c:
+                params["C"] = trial.suggest_float("C", *cl["C"], log=True)
+            if "class_weight" in cl:
+                # YAML 의 null 은 None 으로 로드됨 → 그대로 categorical 후보로 사용
+                params["class_weight"] = trial.suggest_categorical("class_weight", cl["class_weight"])
+
+        # ── LightGBM 공간 (조건부) ──
+        if "lgbm" in sp and need_lgbm:
             g = sp["lgbm"]
             if "n_estimators" in g:
-                params["n_estimators"]      = trial.suggest_int("n_estimators", *g["n_estimators"], log=True)
+                params["n_estimators"] = trial.suggest_int("n_estimators", *g["n_estimators"], log=True)
             if "num_leaves" in g:
-                params["num_leaves"]        = trial.suggest_int("num_leaves", *g["num_leaves"], log=True)
+                params["num_leaves"] = trial.suggest_int("num_leaves", *g["num_leaves"], log=True)
             if "max_depth" in g:
-                lo, hi = g["max_depth"]
-                params["max_depth"]         = trial.suggest_int("max_depth", lo, hi)
+                params["max_depth"] = trial.suggest_int("max_depth", *g["max_depth"])
             if "learning_rate" in g:
-                params["learning_rate"]     = trial.suggest_float("learning_rate", *g["learning_rate"], log=True)
+                params["learning_rate"] = trial.suggest_float("learning_rate", *g["learning_rate"], log=True)
             if "min_child_samples" in g:
-                params["min_child_samples"] = trial.suggest_int("min_child_samples", *g["min_child_samples"], log=True)
+                params["min_child_samples"] = trial.suggest_int(
+                    "min_child_samples", *g["min_child_samples"], log=True
+                )
             if "colsample_bytree" in g:
-                params["colsample_bytree"]  = trial.suggest_float("colsample_bytree", *g["colsample_bytree"])
+                params["colsample_bytree"] = trial.suggest_float("colsample_bytree", *g["colsample_bytree"])
             if "subsample" in g:
-                params["subsample"]         = trial.suggest_float("subsample", *g["subsample"])
+                params["subsample"] = trial.suggest_float("subsample", *g["subsample"])
             if "reg_alpha" in g:
-                params["reg_alpha"]         = trial.suggest_float("reg_alpha", *g["reg_alpha"], log=True)
+                params["reg_alpha"] = trial.suggest_float("reg_alpha", *g["reg_alpha"], log=True)
             if "reg_lambda" in g:
-                params["reg_lambda"]        = trial.suggest_float("reg_lambda", *g["reg_lambda"], log=True)
-
-        # ── FastText 공간 ──
-        if "fasttext" in sp:
-            ft = sp["fasttext"]
-            if "vector_size" in ft:
-                params["vector_size"] = trial.suggest_int("vector_size", *ft["vector_size"])
-            if "window" in ft:
-                params["window"]      = trial.suggest_int("window", *ft["window"])
-            if "min_count" in ft:
-                params["min_count"]   = trial.suggest_int("min_count", *ft["min_count"])
-            if "epochs" in ft:
-                params["epochs"]      = trial.suggest_int("ft_epochs", *ft["epochs"])
-            if "sg" in ft:
-                params["sg"]          = trial.suggest_int("sg", *ft["sg"])
-            if "negative" in ft:
-                params["negative"]    = trial.suggest_int("negative", *ft["negative"])
-
-        # ── FastText 다운스트림 분류기 ──
-        if "classifier" in sp:
-            clf_choices = sp["classifier"].get("type", ["logreg"])
-            clf_type = trial.suggest_categorical("classifier_type", clf_choices)
-            params["classifier_type"] = clf_type
-            if clf_type == "logreg" and "logreg" in sp["classifier"]:
-                lr_sp = sp["classifier"]["logreg"]
-                if "C" in lr_sp:
-                    params["C"] = trial.suggest_float("C", *lr_sp["C"], log=True)
-                if "max_iter" in lr_sp:
-                    params["max_iter"] = trial.suggest_int("max_iter", *lr_sp["max_iter"])
-
-        # ── KoELECTRA 공간 ──
-        if "training" in sp:
-            tr = sp["training"]
-            if "learning_rate" in tr:
-                params["learning_rate"] = trial.suggest_float("lr", *tr["learning_rate"], log=True)
-            if "batch_size" in tr:
-                params["batch_size"]    = trial.suggest_categorical("batch_size", tr["batch_size"])
-            if "epochs" in tr:
-                params["epochs"]        = trial.suggest_int("epochs", *tr["epochs"])
-            if "max_length" in tr:
-                params["max_length"]    = trial.suggest_categorical("max_length", tr["max_length"])
-            if "dropout" in tr:
-                params["dropout"]       = trial.suggest_float("dropout", *tr["dropout"])
-            if "freeze_layers" in tr:
-                params["freeze_layers"] = trial.suggest_int("freeze_layers", *tr["freeze_layers"])
-            if "warmup_ratio" in tr:
-                params["warmup_ratio"]  = trial.suggest_float("warmup_ratio", *tr["warmup_ratio"])
-            if "weight_decay" in tr:
-                params["weight_decay"]  = trial.suggest_float("weight_decay", *tr["weight_decay"])
-
-        if "loss_weights" in sp:
-            lw = sp["loss_weights"]
-            w_large  = trial.suggest_float("w_large",  *lw["large"])
-            w_medium = trial.suggest_float("w_medium", *lw["medium"])
-            w_tag    = trial.suggest_float("w_tag",    *lw["tag"])
-            total = w_large + w_medium + w_tag
-            params["w_large"]  = w_large  / total
-            params["w_medium"] = w_medium / total
-            params["w_tag"]    = w_tag    / total
+                params["reg_lambda"] = trial.suggest_float("reg_lambda", *g["reg_lambda"], log=True)
 
         return params

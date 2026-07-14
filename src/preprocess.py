@@ -1,244 +1,310 @@
 """
-공용 전처리 모듈.
+공용 전처리 모듈 (2026-07 개편판).
 
-파이프라인:
-    1. REFProductNameParser로 refined_text 생성 (기존 parser 재사용)
-       - 일반 카테고리: 브랜드 사전 적용 (브랜드명 제거)
-       - 술 카테고리:   브랜드 사전 미적용 (브랜드명 보존, 노이즈만 제거)
-    2. [추가] post_refine() — 파서 이후 잔재 노이즈 2차 정제
-       - 단가 괄호 잔재: (100g당 ), (당 ), (10g당 ) 등
-       - 홍보 문구 잔재: 최대 적립, 최저, 최대~
-       - 부속 설명 괄호: (소스 포함), (보자기 동봉), (증정) 등
-       - 빈 의미 괄호:   ( + ), ( X 4), (/), ( X) 등
-       - 특수문자 잔재:  끝의 * X, *24캔, 1/ 등
-       - 할인율 잔재:    단독으로 남은 NN%
-    3. Okt 명사 추출 + 불용어 제거 → nouns_text
-    4. 타깃 컬럼 LabelEncoder 인코딩 (대/중분류, 카테고리태그)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[개편 요약]
 
-변경 이력:
-변경 이력:
-    - alcohol_brand_preserve 로직 변경:
-      기존: 파서 적용 후 refined_text가 짧으면 brand_name으로 사후 복구
-      변경: 술 카테고리는 처음부터 빈 브랜드 사전을 사용하는 별도 파서를 적용
-            → 브랜드 제거 자체를 하지 않아 "오프리16" → "오프리16" 유지
-    - post_refine() 추가:
-      파서의 정규식 패턴이 부분 매칭 후 남기는 잔재와
-      크롤링 원본에서 유입된 홍보/부속 문구를 2차로 제거
+1. 파싱 정책 토글화 (PreprocessOptions → ParserOptions 전달)
+   - remove_brand / remove_volume / remove_quantity : ON/OFF
+   - placeholder : 제거 대신 BRANDTOK/VOLTOK/QTYTOK 치환
+   ※ 가격·배송·적립·리뷰수 등 '순수 노이즈'는 토글 없이 무조건 제거.
+
+2. 형태소 분석기 전환: KoNLPy Okt → Mecab-ko + 자동 사용자사전
+   - python-mecab-ko (pip) 사용. 시스템 mecab 설치 불필요.
+   - 사용자사전은 코드가 '자동 생성·자동 컴파일'한다 (사람 개입 0):
+       (a) 보호 명사 시드 (탕수육·카스텔라·건면 …)
+       (b) 술 스타일어 사전 (소비뇽블랑·싱글배럴 …)
+       (c) 데이터셋의 PGIN/GIN 어휘 (호출 측에서 domain_words 로 주입)
+     → resources/mecab_userdic.csv 생성 → `python -m mecab dict-index` 로
+       컴파일 → MeCab(user_dictionary_path=...) 로 로드.
+     단어 집합의 해시가 같으면 재컴파일을 생략한다(캐시).
+   - Okt 는 하위 호환용으로 유지 (--morpheme okt).
+
+3. Okt/Mecab 모두 '명사 추출' 시 플레이스홀더 토큰(영문)을 보존하도록
+   Mecab 은 pos 태그 {NNG, NNP, SL} 를 채택한다.
+
+4. post_refine() 2차 정제는 기존 그대로 유지.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
+from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
+import subprocess
+import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
 logger = logging.getLogger(__name__)
 
-# KoNLPy 선택적 임포트 (Java 미설치 환경 대응)
+# ── 선택적 임포트 (환경별 대응) ─────────────────────────────────────
 try:
     from konlpy.tag import Okt
     _OKT_AVAILABLE = True
 except Exception:
     _OKT_AVAILABLE = False
-    logger.warning("KoNLPy Okt 초기화 실패. nouns_text는 refined_text와 동일하게 설정됩니다.")
 
-# product_name_parser는 프로젝트 루트에 위치
 try:
-    from product_name_parser import REFProductNameParser, create_brand_matcher
+    from mecab import MeCab            # python-mecab-ko
+    _MECAB_AVAILABLE = True
+except Exception:
+    _MECAB_AVAILABLE = False
+
+try:
+    from product_name_parser import (
+        ParserOptions,
+        REFProductNameParser,
+        create_brand_matcher,
+    )
     _PARSER_AVAILABLE = True
 except ImportError:
     _PARSER_AVAILABLE = False
     logger.warning("product_name_parser 임포트 실패. 원본 product_name을 그대로 사용합니다.")
 
+from src.lexicons import ALCOHOL_STYLE_LEXICON
+
 ALCOHOL_LARGE = "술"
 
+# Mecab 사용자사전 산출물 경로 (자동 생성 — 사람이 만들 필요 없음)
+_USERDIC_CSV = Path("resources/mecab_userdic.csv")
+_USERDIC_DIC = Path("resources/mecab_userdic.dic")
+_USERDIC_HASH = Path("resources/mecab_userdic.hash")
+
 
 # ──────────────────────────────────────────────────────────────────
-# 2차 정제 패턴 (POST_REFINE_PATTERNS)
-#
-# 파서(REFProductNameParser) 적용 이후에도 남아있는 잔재 노이즈를
-# 순서대로 제거한다. 패턴은 보수적으로 설계하여 의미있는 괄호
-# (특), (글루텐 프리) 등은 보존한다.
+# 2차 정제 패턴 — 기존 유지 (파서 이후 잔재 노이즈 제거)
 # ──────────────────────────────────────────────────────────────────
 _POST_REFINE_PATTERNS: List[re.Pattern] = [
-    # ── 단가 괄호 잔재 ───────────────────────────────────────────
-    # (100g당 ), (10g당 ), (당 ), (1개당 ), (ml당 ) 등
-    # 숫자+단위+당 또는 단독 '당'이 괄호 안에 있고 뒤에 값이 없는 경우
-    re.compile(r'\(\s*(?:\d+(?:\.\d+)?(?:g|kg|ml|l|개|원))?\s*당\s*\)'),
-
-    # ── 홍보 문구 잔재 ───────────────────────────────────────────
-    # 최대 N원 적립 (숫자 포함)
+    # 단가 괄호 잔재: (100g당 ), (1정당 ), (당 ) 등
+    # ★단위 목록 보강: 가격 노이즈 패턴(인덱스 3)이 "(1정당 1,057원)"의 금액만
+    #   지우고 남긴 "(1정당 )" 류를 마저 제거하기 위해 정/구/본/매/팩/세트 추가
+    re.compile(r'\(\s*(?:\d+(?:\.\d+)?(?:g|kg|ml|l|개|원|정|구|본|매|팩|세트))?\s*당\s*\)'),
+    # 홍보 문구 잔재
     re.compile(r'최대\s*\d+[원\w]*\s*적립'),
-    # 최대 적립 (숫자 없는 잔재)
     re.compile(r'최대\s*적립'),
-    # 최저 N원 잔재
     re.compile(r'최저\s*\d*[원\w]*'),
-    # 최대~ 형태 (예: 최대~ 최대~)
     re.compile(r'최대~'),
-
-    # ── 부속 설명 괄호 ───────────────────────────────────────────
-    # (소스 포함), (보자기 동봉), (티백 포함), (갈치속젓 증정) 등
-    # '포함', '동봉', '증정'으로 끝나는 괄호 전체 제거
+    # 부속 설명 괄호: (소스 포함), (증정) 등
     re.compile(r'\([^)]*(?:포함|동봉|증정)\)'),
-
-    # ── 할인율 잔재 ─────────────────────────────────────────────
-    # 단독으로 남은 NN% (뒤에 괄호가 오지 않는 경우)
-    # 예: "넛츠팜 구운땅콩 25%" → "넛츠팜 구운땅콩"
+    # 단독 할인율 잔재: NN%
     re.compile(r'(?<!\w)\d+%(?!\s*\()'),
-
-    # ── 빈 의미 괄호 ────────────────────────────────────────────
-    # ( + ), ( X 4), ( X), (/), ( * ) 등
-    # 괄호 안에 한글/영문 의미 단어 없이 기호+숫자+공백만 있는 경우
+    # 빈 의미 괄호: ( + ), ( X 4) 등
     re.compile(r'\(\s*[+\-×xX*/÷|,\s\d]*\s*\)'),
-
-    # ── 끝 단독 특수문자 잔재 ───────────────────────────────────
-    # 끝에 공백 후 단독 * X 등 (예: "칠레산 블루베리 *", "동결건조 매생이 X")
+    # 끝 단독 특수문자 / *숫자단위
     re.compile(r'\s+[*×xX]\s*$'),
-    # *숫자단위 형태 (예: *24캔, *4개) — 공백 없이 붙은 경우도 처리
     re.compile(r'\*\d+[가-힣a-zA-Z]*$'),
-
-    # ── 분수/슬래시 잔재 ─────────────────────────────────────────
-    # 끝에 남은 숫자/ 형태 (예: "친환경 적양배추 1/")
-    # 보존: "(중과/)" 같은 괄호 안 슬래시는 영향 없음
+    # 분수/슬래시 잔재
     re.compile(r'(?<!\))\s+\d+/\s*$'),
     re.compile(r'(?<![가-힣a-zA-Z(])\d+/\s*$'),
 ]
 
 
 def post_refine(text: str) -> str:
-    """
-    파서(REFProductNameParser) 적용 이후 남아있는 잔재 노이즈를 제거한다.
-
-    제거 대상:
-        - 단가 괄호 잔재: (100g당 ), (당 ), (10g당 ) 등
-        - 홍보 문구:      최대 적립, 최저, 최대~, NN%
-        - 부속 설명 괄호: (소스 포함), (보자기 동봉), (증정) 등
-        - 빈 의미 괄호:   ( + ), ( X 4), (/), ( X) 등
-        - 특수문자 잔재:  끝의 * X, *24캔, 숫자/ 등
-        - 비인쇄 공백:    \\xa0 등
-
-    보존 대상:
-        - (특), (글루텐 프리) 등 의미 있는 한글 포함 괄호
-        - 1.3kg, 3kg, CS 등 제품 규격/시리즈 정보
-
-    Args:
-        text: REFProductNameParser.parse() 이후의 refined_text
-
-    Returns:
-        2차 정제된 문자열
-    """
+    """파서 적용 이후 남은 잔재 노이즈(단가 괄호·홍보 문구 등)를 제거한다."""
     if not text:
         return text
-
-    result = text.replace('\xa0', ' ')  # non-breaking space 정규화
-
+    result = text.replace('\xa0', ' ')          # non-breaking space 정규화
     for pat in _POST_REFINE_PATTERNS:
         result = pat.sub('', result)
-
-    # 빈 괄호 잔재 정리 (패턴 적용 후 생성될 수 있음)
-    result = re.sub(r'\(\s*\)', '', result)
+    result = re.sub(r'\(\s*\)', '', result)     # 패턴 적용 후 생긴 빈 괄호
     result = re.sub(r'\[\s*\]', '', result)
-
-    # 연속 공백 → 단일 공백, 앞뒤 정리
     result = re.sub(r'\s+', ' ', result).strip()
-
-    # 끝에 남은 단독 구두점/공백 제거
     result = re.sub(r'[\s,.\-]+$', '', result).strip()
-
     return result
+
+
+# ──────────────────────────────────────────────────────────────────
+# Mecab 자동 사용자사전 빌더
+# ──────────────────────────────────────────────────────────────────
+
+def _has_jongseong(word: str) -> str:
+    """
+    mecab-ko-dic CSV의 has_jongseong(받침 유무) 필드값 T/F 를 계산한다.
+    (한글 음절 = 0xAC00 + 초성*588 + 중성*28 + 종성 → 종성 = (code-0xAC00) % 28)
+    """
+    ch = word.strip()[-1]
+    if '가' <= ch <= '힣':
+        return 'T' if (ord(ch) - ord('가')) % 28 != 0 else 'F'
+    return 'F'
+
+
+def build_mecab_userdic(domain_words: Iterable[str]) -> Optional[Path]:
+    """
+    도메인 명사 집합으로 Mecab 사용자사전(.dic)을 자동 생성한다.
+
+    입력 단어 = (보호 명사) ∪ (술 스타일어) ∪ (호출측 domain_words: PGIN 어휘 등).
+    - 한글 2자 이상 단어만 등재 (1자·영문은 시스템 사전이 이미 잘 처리)
+    - 단어 집합 해시가 이전과 같으면 재컴파일 생략 (캐시)
+    - 컴파일: `python -m mecab dict-index --userdic <out.dic> <in.csv>`
+      (python-mecab-ko 공식 문서의 사용자사전 빌드 절차)
+
+    Returns:
+        컴파일된 .dic 경로. mecab 미설치/컴파일 실패 시 None (기본 사전으로 동작).
+    """
+    if not _MECAB_AVAILABLE:
+        return None
+
+    # 1. 등재 단어 수집 — 보호명사 + 술 스타일어 + 호출측 도메인 어휘
+    from product_name_parser.parser import _PROTECTED_NOUNS_SEED
+    words: set[str] = set(_PROTECTED_NOUNS_SEED)
+    for group_words in ALCOHOL_STYLE_LEXICON.values():
+        words.update(group_words)
+    for w in domain_words:
+        if w and isinstance(w, str):
+            # PGIN이 "냉동 치킨"처럼 공백 포함이면 각 토큰과 붙인 형태 모두 등재
+            for tok in [w.replace(" ", ""), *w.split()]:
+                words.add(tok.strip())
+
+    # 한글 2자 이상만 등재 (mecab CSV는 한글 표층형 기준으로 작성)
+    words = {w for w in words if len(w) >= 2 and re.fullmatch(r"[가-힣]+", w)}
+    if not words:
+        return None
+
+    # 2. 캐시 검사 — 단어 집합 해시가 같으면 기존 .dic 재사용
+    digest = hashlib.sha256("\n".join(sorted(words)).encode()).hexdigest()
+    if _USERDIC_DIC.exists() and _USERDIC_HASH.exists():
+        if _USERDIC_HASH.read_text().strip() == digest:
+            logger.info("Mecab 사용자사전 캐시 재사용: %s (%d단어)", _USERDIC_DIC, len(words))
+            return _USERDIC_DIC
+
+    # 3. CSV 생성 — mecab-ko-dic 형식:
+    #    표층형,,,비용,품사,의미,받침유무,읽기,타입,첫품사,끝품사,표현
+    #    비용 0 = 최우선 (기존 분절보다 사용자 단어가 항상 이김)
+    _USERDIC_CSV.parent.mkdir(parents=True, exist_ok=True)
+    with open(_USERDIC_CSV, "w", encoding="utf-8") as f:
+        for w in sorted(words):
+            f.write(f"{w},,,0,NNG,*,{_has_jongseong(w)},{w},*,*,*,*\n")
+
+    # 4. 컴파일 — python -m mecab dict-index
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "mecab", "dict-index",
+             "--userdic", str(_USERDIC_DIC), str(_USERDIC_CSV)],
+            check=True, capture_output=True, text=True,
+        )
+        _USERDIC_HASH.write_text(digest)
+        logger.info("Mecab 사용자사전 컴파일 완료: %s (%d단어)", _USERDIC_DIC, len(words))
+        return _USERDIC_DIC
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        logger.warning("사용자사전 컴파일 실패 — 기본 사전으로 진행: %s", e)
+        return None
+
+
+# ──────────────────────────────────────────────────────────────────
+# 전처리 옵션
+# ──────────────────────────────────────────────────────────────────
+
+@dataclass
+class PreprocessOptions:
+    """
+    전처리 A/B 실험 토글 모음 (CLI 인수 → 이 객체 → 파서/형태소기로 전달).
+
+    Attributes:
+        remove_brand:      브랜드 제거 ON/OFF  (OFF = 브랜드 원문 유지 실험)
+        remove_volume:     용량 제거 ON/OFF
+        remove_quantity:   수량 제거 ON/OFF
+        placeholder:       제거 대신 BRANDTOK/VOLTOK/QTYTOK 치환
+        morpheme_analyzer: "mecab"(신규 기본) | "okt"(구버전) | "none"
+        alcohol_brand_preserve: 술 카테고리는 브랜드 제거를 항상 건너뜀
+    """
+    remove_brand:    bool = True
+    remove_volume:   bool = True
+    remove_quantity: bool = True
+    placeholder:     bool = False
+    morpheme_analyzer: str = "mecab"
+    alcohol_brand_preserve: bool = True
 
 
 class REFPreprocessor:
     """
-    RE:FRIDGE 제품명 전처리기.
+    RE:FRIDGE 제품명 전처리기 (토글판).
 
-    fit_transform()으로 DataFrame을 변환하여:
-        - refined_text : 파서 정제 + post_refine() 2차 정제 제품명
-        - nouns_text   : Okt 명사 추출 + 불용어 제거 (공백 구분)
-        - label_large  : 대분류 인코딩 (int)
-        - label_medium : 중분류 인코딩 (int)
-        - label_tag    : 카테고리태그 인코딩 (int)
-    컬럼을 추가한다.
-
-    label_encoders 프로퍼티로 LabelEncoder 3개 접근 가능.
-
-    파서 전략:
-        - 일반 카테고리: _parser (브랜드 사전 적용 → 브랜드명 제거)
-        - 술 카테고리  : _parser_no_brand (빈 브랜드 사전 → 브랜드명 보존, 노이즈만 제거)
+    fit_transform(df) 결과 컬럼:
+        refined_text : 파서 정제 + post_refine 2차 정제 (토글 반영)
+        nouns_text   : 형태소 명사열 (Mecab 사용자사전 or Okt)
+        label_large / label_medium / label_tag : LabelEncoder 정수 인코딩
     """
 
     def __init__(
         self,
         brand_dict_path: str = "product_data_collection/not_grocery_and_brand_list/grocery_brand_name.json",
         stopwords: list[str] | None = None,
-        alcohol_brand_preserve: bool = True,
+        options: PreprocessOptions | None = None,
         use_parser: bool = True,
-        morpheme_analyzer: str = "Okt",
+        domain_words: Iterable[str] | None = None,
     ) -> None:
+        self._opt = options or PreprocessOptions()
         self._stopwords: set[str] = set(stopwords or [])
-        self._alcohol_brand_preserve = alcohol_brand_preserve
         self._use_parser = use_parser and _PARSER_AVAILABLE
 
         # LabelEncoder (fit 전까지 None)
-        self._le_large:  LabelEncoder | None = None
+        self._le_large: LabelEncoder | None = None
         self._le_medium: LabelEncoder | None = None
-        self._le_tag:    LabelEncoder | None = None
+        self._le_tag: LabelEncoder | None = None
 
-        # 파서 초기화
-        # _parser         : 브랜드 사전 적용 (일반 카테고리용)
-        # _parser_no_brand: 빈 브랜드 사전   (술 카테고리용 — 브랜드명 보존)
-        self._parser: Optional[REFProductNameParser] = None
-        self._parser_no_brand: Optional[REFProductNameParser] = None
-
+        # ── 파서 2종 초기화 (일반용 / 술용=브랜드 미제거) ──
+        self._parser = None
+        self._parser_no_brand = None
         if self._use_parser:
-            self._parser, self._parser_no_brand = self._init_parser(brand_dict_path)
+            self._parser, self._parser_no_brand = self._init_parsers(brand_dict_path)
 
-        # 형태소 분석기
+        # ── 형태소 분석기 초기화 ──
         self._okt = None
-        if _OKT_AVAILABLE and morpheme_analyzer == "Okt":
-            self._okt = Okt()
-            logger.info("Okt 형태소 분석기 초기화 완료")
+        self._mecab = None
+        analyzer = self._opt.morpheme_analyzer.lower()
+
+        if analyzer == "mecab":
+            if _MECAB_AVAILABLE:
+                # 사용자사전 자동 빌드 (도메인 어휘 = PGIN/GIN 등, 호출측 주입)
+                userdic = build_mecab_userdic(domain_words or [])
+                try:
+                    self._mecab = (
+                        MeCab(user_dictionary_path=[str(userdic)]) if userdic else MeCab()
+                    )
+                    logger.info("Mecab 초기화 완료 (userdic=%s)", bool(userdic))
+                except Exception as e:
+                    logger.warning("Mecab 초기화 실패 → 형태소 분석 생략: %s", e)
+            else:
+                logger.warning("python-mecab-ko 미설치 → 형태소 분석 생략. pip install python-mecab-ko")
+        elif analyzer == "okt":
+            if _OKT_AVAILABLE:
+                self._okt = Okt()
+                logger.info("Okt 형태소 분석기 초기화 완료")
+            else:
+                logger.warning("KoNLPy Okt 초기화 실패 → 형태소 분석 생략")
+        # analyzer == "none" 이면 nouns_text = refined_text (char n-gram 단독 실험용)
 
     # ──────────────────────────────────────────────────────────────
     # Public API
     # ──────────────────────────────────────────────────────────────
 
     def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        DataFrame에 refined_text, nouns_text, label_* 컬럼을 추가하여 반환.
-
-        Args:
-            df: load_data() 반환 DataFrame
-                (product_name, large_category, medium_category,
-                 category_tag, brand_name 컬럼 필요)
-
-        Returns:
-            원본 + 신규 컬럼 DataFrame (inplace 변경 없음)
-        """
+        """refined_text / nouns_text / label_* 컬럼을 추가한 새 DataFrame 반환."""
         result = df.copy()
 
-        logger.info("제품명 정제 시작 (%d개)", len(result))
+        logger.info("제품명 정제 시작 (%d개) — 옵션: %s", len(result), self._opt)
         result["refined_text"] = result.apply(self._refine_row, axis=1)
 
-        logger.info("명사 추출 시작")
+        logger.info("명사 추출 시작 (analyzer=%s)", self._opt.morpheme_analyzer)
         result["nouns_text"] = result["refined_text"].apply(self._extract_nouns)
 
         logger.info("레이블 인코딩")
         self._le_large  = LabelEncoder().fit(result["large_category"])
         self._le_medium = LabelEncoder().fit(result["medium_category"])
         self._le_tag    = LabelEncoder().fit(result["category_tag"])
-
         result["label_large"]  = self._le_large.transform(result["large_category"])
         result["label_medium"] = self._le_medium.transform(result["medium_category"])
         result["label_tag"]    = self._le_tag.transform(result["category_tag"])
 
         logger.info(
-            "전처리 완료 — refined_text 평균 길이: %.1f자, nouns_text 평균 길이: %.1f자",
+            "전처리 완료 — refined 평균 %.1f자, nouns 평균 %.1f자",
             result["refined_text"].str.len().mean(),
             result["nouns_text"].str.len().mean(),
         )
@@ -258,42 +324,29 @@ class REFPreprocessor:
 
     @property
     def label_encoders(self) -> dict[str, LabelEncoder]:
-        """{"large": le, "medium": le, "tag": le} 형태로 반환."""
         if self._le_large is None:
             raise RuntimeError("fit_transform()을 먼저 호출하세요.")
-        return {
-            "large":  self._le_large,
-            "medium": self._le_medium,
-            "tag":    self._le_tag,
-        }
+        return {"large": self._le_large, "medium": self._le_medium, "tag": self._le_tag}
 
     @property
     def n_classes(self) -> dict[str, int]:
-        """각 타깃의 클래스 수."""
-        les = self.label_encoders
-        return {k: len(v.classes_) for k, v in les.items()}
+        return {k: len(v.classes_) for k, v in self.label_encoders.items()}
 
     # ──────────────────────────────────────────────────────────────
-    # Private helpers
+    # Private
     # ──────────────────────────────────────────────────────────────
 
     def _refine_row(self, row: pd.Series) -> str:
         """
-        행 단위 제품명 정제.
-
-        1단계 — 파서 적용:
-            술 카테고리: _parser_no_brand → 브랜드명 보존, 노이즈(대괄호 등)만 제거
-            일반 카테고리: _parser → 브랜드명 제거 + 용량/수량/노이즈 제거
-
-        2단계 — post_refine():
-            파서 이후 남아있는 잔재 노이즈 제거
-            (단가 괄호, 최대 적립, 부속 설명 괄호, 특수문자 등)
+        행 단위 정제.
+        1) 술 카테고리 & alcohol_brand_preserve → 브랜드 미제거 파서 사용
+        2) 일반 카테고리 → 토글 반영 파서
+        3) post_refine 2차 정제
         """
         name  = str(row["product_name"]) if pd.notna(row["product_name"]) else ""
         large = str(row.get("large_category", "")) if pd.notna(row.get("large_category", "")) else ""
 
-        # 술 카테고리: 브랜드 사전 미적용 파서 사용 (브랜드명 보존)
-        if self._alcohol_brand_preserve and large == ALCOHOL_LARGE:
+        if self._opt.alcohol_brand_preserve and large == ALCOHOL_LARGE:
             parser = self._parser_no_brand or self._parser
         else:
             parser = self._parser
@@ -303,64 +356,77 @@ class REFPreprocessor:
 
         parsed = parser.parse(name)
         refined = parsed.refined_text or name
-
-        # 2차 정제: 파서 이후 잔재 노이즈 제거
         return post_refine(refined.strip() if refined else name)
 
     def _extract_nouns(self, text: str) -> str:
-        """Okt 명사 추출 후 불용어 제거, 공백으로 연결."""
+        """
+        형태소 명사 추출 (Mecab 우선).
+
+        Mecab: pos 태그 {NNG(일반명사), NNP(고유명사), SL(외국어)} 채택.
+               SL 을 포함해야 BRANDTOK/VOLTOK/QTYTOK 플레이스홀더가 살아남는다.
+        Okt:   기존 nouns() 방식 유지.
+        불용어와 1글자 한글 명사는 제거 (플레이스홀더·영문은 길이 무관 유지).
+        """
         if not text:
             return ""
-        if self._okt is None:
-            return text
+
+        tokens: list[str] = []
         try:
-            nouns = self._okt.nouns(text)
-            filtered = [n for n in nouns if n not in self._stopwords and len(n) > 1]
-            return " ".join(filtered) if filtered else text
+            if self._mecab is not None:
+                tokens = [
+                    surface for surface, tag in self._mecab.pos(text)
+                    if tag in ("NNG", "NNP", "SL")
+                ]
+            elif self._okt is not None:
+                tokens = self._okt.nouns(text)
+            else:
+                return text                          # 분석기 없음 → 원문 그대로
         except Exception as e:
-            logger.debug("Okt 명사 추출 실패 '%s': %s", text, e)
+            logger.debug("명사 추출 실패 '%s': %s", text, e)
             return text
 
-    @staticmethod
-    def _init_parser(brand_dict_path: str) -> Tuple[
-        Optional["REFProductNameParser"],
-        Optional["REFProductNameParser"],
-    ]:
-        """
-        브랜드 사전을 로드하여 파서 두 개를 초기화한다.
+        filtered = [
+            t for t in tokens
+            if t not in self._stopwords
+            and (len(t) > 1 or not re.fullmatch(r"[가-힣]", t))  # 1글자 한글만 배제
+        ]
+        return " ".join(filtered) if filtered else text
 
-        Returns:
-            (parser, parser_no_brand)
-            - parser          : 브랜드 사전 적용 (일반 카테고리용)
-            - parser_no_brand : 빈 브랜드 사전   (술 카테고리용)
+    def _init_parsers(
+        self, brand_dict_path: str
+    ) -> Tuple[Optional["REFProductNameParser"], Optional["REFProductNameParser"]]:
+        """
+        브랜드 사전을 로드하여 파서 2개를 초기화한다.
+        - parser          : 토글 옵션 반영 (일반 카테고리)
+        - parser_no_brand : 빈 브랜드 사전 (술 카테고리 — 브랜드 보존)
         """
         path = Path(brand_dict_path)
         brand_names: list[str] = []
-
         if path.exists():
             try:
                 with open(path, encoding="utf-8") as f:
                     data = json.load(f)
-                if isinstance(data, list):
-                    brand_names = [str(b) for b in data if b]
-                elif isinstance(data, dict):
-                    brand_names = list(data.keys())
+                brand_names = (
+                    [str(b) for b in data if b] if isinstance(data, list)
+                    else list(data.keys())
+                )
                 logger.info("브랜드 사전 로드: %d개", len(brand_names))
             except Exception as e:
                 logger.warning("브랜드 사전 로드 실패: %s", e)
         else:
-            logger.warning(
-                "브랜드 사전 파일 없음: %s. 파서는 브랜드 없이 실행됩니다.",
-                brand_dict_path,
-            )
+            logger.warning("브랜드 사전 파일 없음: %s", brand_dict_path)
 
-        # 일반용: 브랜드 사전 적용
-        matcher = create_brand_matcher(brand_names)
-
-        # 술용: 빈 사전 → find_match()가 항상 None 반환 → 브랜드 제거 없음
-        matcher_no_brand = create_brand_matcher([])
+        # ParserOptions 로 전처리 토글을 파서에 그대로 전달
+        popts = ParserOptions(
+            remove_brand=self._opt.remove_brand,
+            remove_volume=self._opt.remove_volume,
+            remove_quantity=self._opt.remove_quantity,
+            placeholder=self._opt.placeholder,
+        )
+        matcher          = create_brand_matcher(brand_names)
+        matcher_no_brand = create_brand_matcher([])     # 빈 사전 → 항상 미매칭
 
         return (
-            REFProductNameParser(brand_matcher=matcher),
-            REFProductNameParser(brand_matcher=matcher_no_brand),
+            REFProductNameParser(brand_matcher=matcher, options=popts),
+            REFProductNameParser(brand_matcher=matcher_no_brand, options=popts),
         )

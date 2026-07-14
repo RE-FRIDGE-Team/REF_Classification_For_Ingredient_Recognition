@@ -57,7 +57,10 @@ def load_data(
         df = pd.read_excel(path, dtype=str)
         logger.info("XLSX 로드: %s (%d행)", path.name, len(df))
     elif suffix == ".csv":
-        df = pd.read_csv(path, dtype=str, encoding="utf-8")   # utf-8 로 읽음
+        # utf-8-sig: BOM 이 있으면 제거하고, 없으면 일반 utf-8 과 동일하게 동작.
+        # (증강 CSV 가 UTF-8 BOM 으로 저장되어 첫 컬럼명이 '\ufeffproduct_name'이
+        #  되는 사고를 방지 — 기존 utf-8 지정의 상위 호환)
+        df = pd.read_csv(path, dtype=str, encoding="utf-8-sig")
         logger.info("CSV 로드: %s (%d행)", path.name, len(df))
     else:
         raise ValueError(f"지원하지 않는 파일 형식: {suffix}. CSV 또는 XLSX만 허용.")
@@ -257,6 +260,51 @@ def _log_fold_summary(strategy, folds, groups, y) -> None:
         if missing_cls:
             logger.warning("[GroupKFold] val 클래스 누락 — %s. StratifiedGroupKFold 전환 권장.",
                            ", ".join(missing_cls))
+
+
+def dedup_near_duplicates(
+    df: pd.DataFrame,
+    text_col: str = "refined_text",
+) -> pd.DataFrame:
+    """
+    제품명 기준 근접중복 행을 제거한다 (★2026-07 신규).
+
+    배경: 같은 제품이 용량/구성만 다르게 여러 번 수집되면 정제 후
+          refined_text 가 사실상 동일해지고, CV에서 train/valid 양쪽에
+          걸리면 점수가 낙관적으로 뻥튀기된다(누수의 한 형태).
+
+    정규화 키: 소문자화 + 공백/특수문자 제거 → 완전 일치 행 중 첫 행만 유지.
+    ※ 원본(is_augmented==0) 행끼리만 dedup 한다. 증강 행은 evaluate.py 의
+      leak_guard 가 valid 원본과의 중복을 fold 별로 이미 차단하므로 유지.
+
+    Args:
+        df:       전처리 완료 DataFrame (refined_text 필요)
+        text_col: 중복 판정에 사용할 텍스트 컬럼
+
+    Returns:
+        중복 제거된 DataFrame (index reset)
+    """
+    if text_col not in df.columns:
+        logger.warning("dedup 스킵 — %s 컬럼 없음", text_col)
+        return df
+
+    # 정규화 키 생성: 대소문자·공백·기호 차이를 무시하는 canonical form
+    norm_key = (
+        df[text_col].fillna("")
+        .str.lower()
+        .str.replace(r"[\s\W_]+", "", regex=True)
+    )
+
+    is_orig = df.get("is_augmented", pd.Series(["0"] * len(df))).astype(str) == "0"
+
+    # 원본 행에서만 첫 등장 이후의 중복을 표시 (증강 행은 대상 외)
+    dup_mask = norm_key.duplicated(keep="first") & is_orig
+
+    before = len(df)
+    out = df[~dup_mask].reset_index(drop=True)
+    logger.info("근접중복 제거: %d행 → %d행 (원본 중복 %d행 삭제)",
+                before, len(out), int(dup_mask.sum()))
+    return out
 
 
 def data_summary(df: pd.DataFrame) -> dict:
