@@ -67,17 +67,22 @@ def _print_rich_table(results: dict[str, CVResult], gate: float) -> None:
     table.add_column("train(s)",   justify="right")
     table.add_column("infer(ms)",  justify="right")
 
-    model_order = ["tfidf_lgbm", "fasttext", "koelectra"]
+    # ★수정(2026-07): 하드코딩 model_order 순회 → results 전체 순회.
+    #   기존에는 등록된 3개 이름만 표에 실려, 신규 모델(text_pipeline)이
+    #   결과가 있어도 빈 표 + "합격 모델 없음"으로 출력되는 버그가 있었다.
+    #   알려진 이름은 선호 순서를 유지하고, 그 외 이름도 뒤에 모두 붙인다.
+    preferred = ["text_pipeline", "tfidf_lgbm", "fasttext", "koelectra"]
     display_names = {
+        "text_pipeline": "Text Pipeline",
         "tfidf_lgbm": "TF-IDF + LightGBM",
         "fasttext":   "FastText + KoNLPy",
         "koelectra":  "KoELECTRA Multi-task",
     }
+    model_order = [n for n in preferred if n in results] + \
+                  [n for n in results if n not in preferred]
 
     passed: list[str] = []
     for name in model_order:
-        if name not in results:
-            continue
         r = results[name]
         f1_str = (
             f"[bold green]{r.large_f1:.4f}±{r.large_f1_std:.4f}[/bold green]"
@@ -136,6 +141,7 @@ def save_comparison_chart(
     """대/중분류·태그 F1을 Bar chart로 저장한다."""
     model_names = list(results.keys())
     display = {
+        "text_pipeline": "Text\nPipeline",
         "tfidf_lgbm": "TF-IDF\n+LightGBM",
         "fasttext":   "FastText\n+KoNLPy",
         "koelectra":  "KoELECTRA\nMulti-task",
@@ -213,6 +219,7 @@ def save_html_report(
             chart_b64 = base64.b64encode(f.read()).decode()
 
     display_names = {
+        "text_pipeline": "Text Pipeline",
         "tfidf_lgbm": "TF-IDF + LightGBM",
         "fasttext":   "FastText + KoNLPy + ML",
         "koelectra":  "KoELECTRA Multi-task",
