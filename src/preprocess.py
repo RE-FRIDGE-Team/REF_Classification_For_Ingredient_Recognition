@@ -206,14 +206,23 @@ class PreprocessOptions:
     """
     전처리 A/B 실험 토글 모음 (CLI 인수 → 이 객체 → 파서/형태소기로 전달).
 
+    [keep_brand_volume — --keep-brand 의 재정의된 의미]
+      쪼개기(브랜드/용량/수량 추출)는 항상 수행하되, 다음 프로세스로 보내는
+      refined_text 를 "브랜드 + 코어 + 용량" 으로 재조립하는 모드.
+        "농심 양파링 오리지널, 80g, 3개 3,960원 …" → "농심 양파링 오리지널 80g"
+      기존 remove_brand=False (원문 위치 방치) 방식의 문제 — 노이즈 패턴 간섭·
+      표기 순서 비일관 — 를 제거한 재조립 방식.
+
     Attributes:
-        remove_brand:      브랜드 제거 ON/OFF  (OFF = 브랜드 원문 유지 실험)
+        keep_brand_volume: ★브랜드·용량 재부착 모드 (--keep-brand 매핑 대상)
+        remove_brand:      브랜드 제거 ON/OFF  (keep_brand_volume=False 일 때만 유효)
         remove_volume:     용량 제거 ON/OFF
         remove_quantity:   수량 제거 ON/OFF
-        placeholder:       제거 대신 BRANDTOK/VOLTOK/QTYTOK 치환
+        placeholder:       제거 대신 BRANDTOK/VOLTOK/QTYTOK 치환 (규격 표기 신호용)
         morpheme_analyzer: "mecab"(신규 기본) | "okt"(구버전) | "none"
-        alcohol_brand_preserve: 술 카테고리는 브랜드 제거를 항상 건너뜀
+        alcohol_brand_preserve: 술 카테고리는 항상 브랜드·용량 재부착 모드로 처리
     """
+    keep_brand_volume: bool = False
     remove_brand:    bool = True
     remove_volume:   bool = True
     remove_quantity: bool = True
@@ -249,11 +258,11 @@ class REFPreprocessor:
         self._le_medium: LabelEncoder | None = None
         self._le_tag: LabelEncoder | None = None
 
-        # ── 파서 2종 초기화 (일반용 / 술용=브랜드 미제거) ──
+        # ── 파서 2종 초기화 (일반용 / 술용=브랜드·용량 재부착 강제) ──
         self._parser = None
-        self._parser_no_brand = None
+        self._parser_alcohol = None
         if self._use_parser:
-            self._parser, self._parser_no_brand = self._init_parsers(brand_dict_path)
+            self._parser, self._parser_alcohol = self._init_parsers(brand_dict_path)
 
         # ── 형태소 분석기 초기화 ──
         self._okt = None
@@ -290,7 +299,9 @@ class REFPreprocessor:
         result = df.copy()
 
         logger.info("제품명 정제 시작 (%d개) — 옵션: %s", len(result), self._opt)
-        result["refined_text"] = result.apply(self._refine_row, axis=1)
+        refined_brand = result.apply(self._refine_row, axis=1)
+        result["refined_text"] = refined_brand.str[0]
+        result["parsed_brand"] = refined_brand.str[1]   # 술 브랜드 마이닝용 메타데이터 보존
 
         logger.info("명사 추출 시작 (analyzer=%s)", self._opt.morpheme_analyzer)
         result["nouns_text"] = result["refined_text"].apply(self._extract_nouns)
@@ -315,7 +326,9 @@ class REFPreprocessor:
         if self._le_large is None:
             raise RuntimeError("fit_transform()을 먼저 호출하세요.")
         result = df.copy()
-        result["refined_text"] = result.apply(self._refine_row, axis=1)
+        refined_brand = result.apply(self._refine_row, axis=1)
+        result["refined_text"] = refined_brand.str[0]
+        result["parsed_brand"] = refined_brand.str[1]
         result["nouns_text"]   = result["refined_text"].apply(self._extract_nouns)
         result["label_large"]  = self._le_large.transform(result["large_category"])
         result["label_medium"] = self._le_medium.transform(result["medium_category"])
@@ -336,10 +349,13 @@ class REFPreprocessor:
     # Private
     # ──────────────────────────────────────────────────────────────
 
-    def _refine_row(self, row: pd.Series) -> str:
+    def _refine_row(self, row: pd.Series) -> tuple[str, str]:
         """
-        행 단위 정제.
-        1) 술 카테고리 & alcohol_brand_preserve → 브랜드 미제거 파서 사용
+        행 단위 정제 — (refined_text, parsed_brand) 반환.
+
+        1) 술 카테고리 & alcohol_brand_preserve → 브랜드·용량 재부착 강제 파서
+           (★구버전의 빈 사전 파서와 달리 브랜드 메타데이터도 정상 추출 —
+             술 브랜드 마이닝 tools/mine_alcohol_brands.py 의 입력 확보 목적)
         2) 일반 카테고리 → 토글 반영 파서
         3) post_refine 2차 정제
         """
@@ -347,16 +363,19 @@ class REFPreprocessor:
         large = str(row.get("large_category", "")) if pd.notna(row.get("large_category", "")) else ""
 
         if self._opt.alcohol_brand_preserve and large == ALCOHOL_LARGE:
-            parser = self._parser_no_brand or self._parser
+            parser = self._parser_alcohol or self._parser
         else:
             parser = self._parser
 
         if not parser:
-            return post_refine(name)
+            return post_refine(name), ""
 
         parsed = parser.parse(name)
         refined = parsed.refined_text or name
-        return post_refine(refined.strip() if refined else name)
+        return (
+            post_refine(refined.strip() if refined else name),
+            parsed.brand_name or "",
+        )
 
     def _extract_nouns(self, text: str) -> str:
         """
@@ -396,9 +415,11 @@ class REFPreprocessor:
         self, brand_dict_path: str
     ) -> Tuple[Optional["REFProductNameParser"], Optional["REFProductNameParser"]]:
         """
-        브랜드 사전을 로드하여 파서 2개를 초기화한다.
-        - parser          : 토글 옵션 반영 (일반 카테고리)
-        - parser_no_brand : 빈 브랜드 사전 (술 카테고리 — 브랜드 보존)
+        브랜드 사전을 로드하여 파서 2개를 초기화하는 단계.
+        - parser         : 토글 옵션 반영 (일반 카테고리)
+        - parser_alcohol : 동일 사전 + 브랜드·용량 재부착 강제 (술 카테고리)
+          ★구버전은 빈 사전으로 브랜드 메타데이터까지 잃었으나, 재조립 방식
+            도입으로 '추출은 하되 텍스트에는 남기는' 처리가 가능해진 구조.
         """
         path = Path(brand_dict_path)
         brand_names: list[str] = []
@@ -421,12 +442,22 @@ class REFPreprocessor:
             remove_brand=self._opt.remove_brand,
             remove_volume=self._opt.remove_volume,
             remove_quantity=self._opt.remove_quantity,
+            keep_brand_in_text=self._opt.keep_brand_volume,
+            keep_volume_in_text=self._opt.keep_brand_volume,
             placeholder=self._opt.placeholder,
         )
-        matcher          = create_brand_matcher(brand_names)
-        matcher_no_brand = create_brand_matcher([])     # 빈 사전 → 항상 미매칭
+        # 술 전용: 사전은 동일, 재부착만 강제
+        popts_alcohol = ParserOptions(
+            remove_brand=self._opt.remove_brand,
+            remove_volume=self._opt.remove_volume,
+            remove_quantity=self._opt.remove_quantity,
+            keep_brand_in_text=True,
+            keep_volume_in_text=True,
+            placeholder=False,
+        )
+        matcher = create_brand_matcher(brand_names)
 
         return (
             REFProductNameParser(brand_matcher=matcher, options=popts),
-            REFProductNameParser(brand_matcher=matcher_no_brand, options=popts),
+            REFProductNameParser(brand_matcher=matcher, options=popts_alcohol),
         )

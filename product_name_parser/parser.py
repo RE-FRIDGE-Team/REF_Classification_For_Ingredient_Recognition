@@ -80,19 +80,36 @@ def _load_protected_nouns(extra_path: str | Path | None = None) -> frozenset[str
 @dataclass
 class ParserOptions:
     """
-    파싱 정책 토글 컨테이너.
+    파싱 정책 토글 컨테이너 (2026-07 2차 개편 — keep 의미 재정의).
+
+    [keep_* 의 정확한 의미]
+      쪼개기(브랜드/용량/수량 메타데이터 추출)는 항상 수행.
+      다음 프로세스로 보내는 refined_text 를 어떻게 조립할지만 결정.
+
+        keep_brand_in_text=True, keep_volume_in_text=True 인 경우:
+          "농심 양파링 오리지널, 80g, 3개 3,960원 …"
+            → brand=농심 / volume=80g / quantity=3 으로 쪼갠 뒤,
+              refined_text = "농심 양파링 오리지널 80g"  (수량·노이즈만 탈락)
+
+      기존 remove_* 방식(브랜드를 '원문 위치에 그대로 방치')과 달리,
+      코어를 완전히 정제한 뒤 [브랜드] + 코어 + [용량] 순으로 '재조립'하므로
+      노이즈 패턴이 용량을 먼저 삼키거나 표기 순서가 뒤죽박죽인 원문에서도
+      항상 일관된 형태의 출력이 보장되는 구조.
 
     Attributes:
-        remove_brand:    브랜드명을 텍스트에서 제거할지 여부
-        remove_volume:   용량(300g 등)을 제거할지 여부
-        remove_quantity: 수량(4개입 등)을 제거할지 여부
+        remove_brand:    브랜드명 제거 여부 (keep_*_in_text 미사용 시의 구버전 동작)
+        remove_volume:   용량 제거 여부
+        remove_quantity: 수량 제거 여부
+        keep_brand_in_text:  코어 정제 후 브랜드를 맨 앞에 재부착
+        keep_volume_in_text: 코어 정제 후 정규화된 용량(80g)을 맨 뒤에 재부착
         placeholder:     True면 '제거' 대신 BRANDTOK/VOLTOK/QTYTOK 로 '치환'
-                         (remove_* 가 True인 항목에만 적용)
         protected_nouns_path: 보호 명사 확장 파일 경로 (없어도 됨)
     """
     remove_brand:    bool = True
     remove_volume:   bool = True
     remove_quantity: bool = True
+    keep_brand_in_text:  bool = False
+    keep_volume_in_text: bool = False
     placeholder:     bool = False
     protected_nouns_path: str | None = "resources/protected_nouns.txt"
 
@@ -146,30 +163,43 @@ class REFProductNameParser:
 
         working = raw_product_name.strip()
 
-        # 1. 브랜드명 추출 (제거와 무관하게 메타데이터로는 항상 추출)
-        brand_name = self._extract_brand(working)
-
-        # 2. 브랜드 제거/치환 — ★토큰 경계 + 보호명사 검사 적용
-        if brand_name and self._opt.remove_brand:
-            replacement = BRAND_TOKEN if self._opt.placeholder else ""
-            working = self._remove_brand_with_boundary(working, brand_name, replacement)
-
-        # 3. 용량/수량 메타데이터 추출 (텍스트 제거 전에 수행)
+        # 1. 메타데이터 추출 — keep/remove 여부와 무관하게 항상 쪼개기 수행
+        brand_name  = self._extract_brand(working)
         volume_info = self._extract_volume(working)
         quantity    = self._extract_quantity(working)
 
-        # 4. 순수 노이즈 제거 (가격·배송·적립·리뷰 등 — 토글 대상 아님, 무조건 제거)
+        keep_mode = self._opt.keep_brand_in_text or self._opt.keep_volume_in_text
+
+        # 2. 브랜드 제거/치환 — ★토큰 경계 + 보호명사 검사 적용
+        #    keep 모드에서는 일단 코어에서 브랜드를 떼어낸 뒤 마지막에 재부착
+        if brand_name and (self._opt.remove_brand or keep_mode):
+            replacement = BRAND_TOKEN if (self._opt.placeholder and not keep_mode) else ""
+            working = self._remove_brand_with_boundary(working, brand_name, replacement)
+
+        # 3. 순수 노이즈 제거 (가격·배송·적립·리뷰 등 — 토글 대상 아님, 무조건 제거)
         refined = self._remove_noise_patterns(working)
 
-        # 5. 용량/수량 텍스트 제거 또는 플레이스홀더 치환 (토글)
-        refined = self._handle_volume_and_quantity(refined)
+        # 4. 용량/수량 텍스트 처리 — keep 모드에서는 코어에서 전부 제거 후 재부착
+        refined = self._handle_volume_and_quantity(refined, force_remove=keep_mode)
 
-        # 6. 최종 정제 (공백/쉼표/빈 괄호 정리)
-        refined = self._final_cleanup(refined)
+        # 5. 코어 확정 (공백/쉼표/빈 괄호 정리)
+        core = self._final_cleanup(refined)
+
+        # 6. 재조립 — [브랜드] + 코어 + [정규화 용량] 순의 일관된 출력 조립
+        refined_out = core
+        if keep_mode:
+            parts: list[str] = []
+            if self._opt.keep_brand_in_text and brand_name and brand_name not in core:
+                parts.append(brand_name)          # 코어에 이미 남아있으면 중복 부착 방지
+            parts.append(core)
+            if self._opt.keep_volume_in_text and volume_info.volume_text:
+                parts.append(volume_info.volume_text)
+            refined_out = " ".join(p for p in parts if p).strip()
 
         return REFParsedProductName(
             original_text=raw_product_name,
-            refined_text=refined,
+            refined_text=refined_out,
+            core_text=core,
             brand_name=brand_name,
             quantity=quantity,
             volume=volume_info.volume_text,
@@ -234,15 +264,21 @@ class REFProductNameParser:
     # 용량/수량 처리 (토글 + 플레이스홀더)
     # ──────────────────────────────────────────────────────────────
 
-    def _handle_volume_and_quantity(self, text: str) -> str:
+    def _handle_volume_and_quantity(self, text: str, force_remove: bool = False) -> str:
         """
-        용량/수량 텍스트를 옵션에 따라 제거 또는 플레이스홀더로 치환한다.
+        용량/수량 텍스트를 옵션에 따라 제거 또는 플레이스홀더로 치환하는 단계.
 
+        force_remove=True (keep 재조립 모드):
+            원문 위치의 용량/수량 표기는 코어에서 전부 제거하고,
+            용량은 parse() 6단계에서 정규화된 형태(80g)로 재부착.
         placeholder=True 인 경우:
-            "300g"  → "VOLTOK",  "4개입" → "QTYTOK"
-            → '규격이 표기되는 상품'이라는 신호를 word 피처로 보존.
+            "300g" → "VOLTOK", "4개입" → "QTYTOK" — 규격 표기 신호의 word 피처 보존용.
         """
         result = text
+        if force_remove:
+            result = VOLUME_PATTERN.sub("", result)
+            result = QUANTITY_PATTERN.sub("", result)
+            return result
         if self._opt.remove_volume:
             repl = f" {VOL_TOKEN} " if self._opt.placeholder else ""
             result = VOLUME_PATTERN.sub(repl, result)

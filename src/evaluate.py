@@ -21,9 +21,12 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     classification_report,
+    cohen_kappa_score,
     confusion_matrix,
     f1_score,
+    matthews_corrcoef,
 )
 
 from .models.base import BaseClassifier, CVResult
@@ -312,24 +315,148 @@ def per_class_f1_report(
     return pd.DataFrame(rows).sort_values("f1", ascending=False)
 
 
+def build_oof_table(
+    details: list[FoldDetail],
+    df: pd.DataFrame,
+    label_encoders: dict,
+) -> pd.DataFrame:
+    """
+    전 fold OOF(out-of-fold) 예측 결합 테이블 생성 — 오류 분석의 단일 소스.
+
+    각 원본 샘플은 전체 CV에서 정확히 한 번 valid 에 등장하므로, 전 fold 를
+    결합하면 데이터 전량에 대한 예측표가 완성되는 구조 (기존 fold 0 단독
+    분석 대비 표본 5배 확보 + 표본 편향 제거).
+
+    Returns:
+        columns = [fold, product_name, refined_text,
+                   true_large, pred_large, true_medium, pred_medium,
+                   true_tag, pred_tag]  — 라벨은 전부 문자열 복원 상태.
+    """
+    le_l, le_m, le_t = label_encoders["large"], label_encoders["medium"], label_encoders["tag"]
+    frames = []
+    for d in details:
+        idx = np.asarray(d.val_indices)
+        sub = df.iloc[idx]
+        frames.append(pd.DataFrame({
+            "fold":         d.fold_idx,
+            "product_name": sub.get("product_name", pd.Series([""] * len(idx))).values,
+            "refined_text": sub.get("refined_text", pd.Series([""] * len(idx))).values,
+            "true_large":   le_l.inverse_transform(d.true_large),
+            "pred_large":   le_l.inverse_transform(d.pred_large),
+            "true_medium":  le_m.inverse_transform(d.true_medium),
+            "pred_medium":  le_m.inverse_transform(d.pred_medium),
+            "true_tag":     le_t.inverse_transform(d.true_tag),
+            "pred_tag":     le_t.inverse_transform(d.pred_tag),
+        }))
+    return pd.concat(frames, ignore_index=True)
+
+
 def error_examples(
     details: list[FoldDetail],
     df: pd.DataFrame,
-    label_encoder_large,
-    n: int = 20,
+    label_encoders: dict,
+    n: int = 5000,
 ) -> pd.DataFrame:
-    """Fold 0 기준 대분류 오분류 예시 상위 n개 반환 (HTML 리포트용)."""
-    d = details[0]
-    mask = d.true_large != d.pred_large
-    err_indices = np.array(d.val_indices)[mask][:n]
+    """
+    대분류 또는 중분류가 틀린 OOF 오류 테이블 반환 (HTML 리포트용).
 
+    ★개편: fold 0 대분류 한정 → 전 fold OOF + 중분류 컬럼 + 오류 유형 라벨.
+    error_type: 대분류오류 / 중분류오류(대분류정답) / 대분류오류·중분류정답
+    """
+    oof = build_oof_table(details, df, label_encoders)
+    large_ok  = oof["true_large"] == oof["pred_large"]
+    medium_ok = oof["true_medium"] == oof["pred_medium"]
+
+    err = oof[~large_ok | ~medium_ok].copy()
+    err_large_ok  = err["true_large"] == err["pred_large"]
+    err_medium_ok = err["true_medium"] == err["pred_medium"]
+    err["error_type"] = np.select(
+        [~err_large_ok & ~err_medium_ok, err_large_ok & ~err_medium_ok],
+        ["대분류오류→중분류오류", "중분류오류(대분류정답)"],
+        default="대분류오류·중분류정답",
+    )
+    cols = ["product_name", "refined_text", "true_large", "pred_large",
+            "true_medium", "pred_medium", "error_type", "fold"]
+    return err[cols].head(n)
+
+
+def _rank_misclassified(oof: pd.DataFrame, task: str) -> pd.DataFrame:
+    """
+    task(large/medium) 기준 '가장 많이 오분류한 카테고리 순위' 테이블 생성.
+
+    columns = [카테고리, 오분류수, 전체수, 오분류율, 최다혼동대상(→예측, 건수)]
+    """
+    t, p = f"true_{task}", f"pred_{task}"
+    err = oof[oof[t] != oof[p]]
+    if err.empty:
+        return pd.DataFrame(columns=["카테고리", "오분류수", "전체수", "오분류율", "최다혼동대상"])
+
+    total = oof.groupby(t).size()
     rows = []
-    for i, idx in enumerate(err_indices):
-        row = df.iloc[idx]
+    for cat, grp in err.groupby(t):
+        top = grp[p].value_counts()
+        top_target, top_cnt = top.index[0], int(top.iloc[0])
         rows.append({
-            "product_name": row.get("product_name", ""),
-            "refined_text": row.get("refined_text", ""),
-            "true_large":   label_encoder_large.inverse_transform([d.true_large[mask][i]])[0],
-            "pred_large":   label_encoder_large.inverse_transform([d.pred_large[mask][i]])[0],
+            "카테고리":    cat,
+            "오분류수":    len(grp),
+            "전체수":      int(total[cat]),
+            "오분류율":    round(len(grp) / total[cat], 4),
+            "최다혼동대상": f"→ {top_target} ({top_cnt}건)",
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows).sort_values("오분류수", ascending=False).reset_index(drop=True)
+
+
+def _task_metrics(y_true, y_pred) -> dict[str, float]:
+    """단일 태스크의 F1 외 보조 분류 지표 묶음 계산."""
+    return {
+        "accuracy":          accuracy_score(y_true, y_pred),
+        "balanced_accuracy": balanced_accuracy_score(y_true, y_pred),
+        "macro_f1":          f1_score(y_true, y_pred, average="macro", zero_division=0),
+        "weighted_f1":       f1_score(y_true, y_pred, average="weighted", zero_division=0),
+        "mcc":               matthews_corrcoef(y_true, y_pred),
+        "cohen_kappa":       cohen_kappa_score(y_true, y_pred),
+    }
+
+
+def hierarchical_error_stats(oof: pd.DataFrame) -> dict:
+    """
+    LCPN 계층 관점의 오류 통계 일괄 계산 (HTML 'Other Statistics' 섹션 소스).
+
+    Returns:
+        {
+          "rank_large":  대분류 오분류 순위 DataFrame,
+          "rank_medium": 중분류 오분류 순위 DataFrame,
+          "case_both_wrong":            대분류부터 틀려 중분류도 틀린 목록,
+          "case_large_ok_medium_wrong": 대분류 정답·중분류 오답 목록 (최중요),
+          "case_large_wrong_medium_ok": 대분류 오답·중분류 정답 목록,
+          "tag_inconsistent":  중분류 정답인데 태그가 틀린 목록
+                               (비어 있으면 태그 오류 = 순수 중분류 오류임이 입증),
+          "metrics": {task: {지표: 값}},   # F1 외 보조 지표
+          "hier_exact_large_medium": 대·중 동시 정답률,
+          "hier_exact_all":          대·중·태그 동시 정답률,
+        }
+    """
+    large_ok  = oof["true_large"]  == oof["pred_large"]
+    medium_ok = oof["true_medium"] == oof["pred_medium"]
+    tag_ok    = oof["true_tag"]    == oof["pred_tag"]
+
+    case_cols = ["product_name", "refined_text",
+                 "true_large", "pred_large", "true_medium", "pred_medium", "fold"]
+
+    return {
+        "rank_large":  _rank_misclassified(oof, "large"),
+        "rank_medium": _rank_misclassified(oof, "medium"),
+        "case_both_wrong":            oof[~large_ok & ~medium_ok][case_cols].reset_index(drop=True),
+        "case_large_ok_medium_wrong": oof[large_ok & ~medium_ok][case_cols].reset_index(drop=True),
+        "case_large_wrong_medium_ok": oof[~large_ok & medium_ok][case_cols].reset_index(drop=True),
+        "tag_inconsistent": oof[medium_ok & ~tag_ok][
+            case_cols[:2] + ["true_medium", "pred_medium", "true_tag", "pred_tag", "fold"]
+        ].reset_index(drop=True),
+        "metrics": {
+            "large":  _task_metrics(oof["true_large"],  oof["pred_large"]),
+            "medium": _task_metrics(oof["true_medium"], oof["pred_medium"]),
+            "tag":    _task_metrics(oof["true_tag"],    oof["pred_tag"]),
+        },
+        "hier_exact_large_medium": float((large_ok & medium_ok).mean()),
+        "hier_exact_all":          float((large_ok & medium_ok & tag_ok).mean()),
+    }

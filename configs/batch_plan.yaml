@@ -1,0 +1,60 @@
+# ═══════════════════════════════════════════════════════════════════
+# RE:FRIDGE 배치 계획서 — v3 실험 축 7종 전체 순차 실행 (src/run_batch.py 입력)
+#
+# time 항목이 각 실험의 '총 벽시계 예산'. 허용 형식: 2h / 90m / 1h30m / 7200
+#   HPO 탐색 = time - reserve(기본 20분, --reserve 로 조정)
+#   강제 종료 = time + grace(기본 30분, --grace 로 조정)
+# n_trials 는 시간이 바인딩되도록 크게 설정 (시간 예산이 실질 제한).
+# 필요 없는 실험은 해당 항목을 주석 처리하면 스킵.
+#
+# ※ 술 브랜드 가제티어 갱신(tools/mine_alcohol_brands.py)은 학습이 아니라
+#   사전 생성 1회성 작업이므로 배치에 포함하지 않음 — 배치 시작 전 1회 실행:
+#   python tools/mine_alcohol_brands.py --input data.csv --out resources/alcohol_brands.txt
+# ═══════════════════════════════════════════════════════════════════
+
+defaults:
+  n_trials: 10000
+  models: text
+
+runs:
+  # ① 재베이스라인 — 2차 패치 신기능 전부 켠 상태의 기준선
+  - name: rebaseline
+    time: 1h30m
+    study_version: v3
+    args: []
+
+  # ② keep-brand 재조립 — 브랜드+용량 보존 축
+  - name: keep_brand
+    time: 1h30m
+    study_version: v3_kb
+    args: ["--keep-brand"]
+
+  # ③ gin-head 절제 — 위치 피처 기여도 (끄면 구버전 head-noun 폴백)
+  - name: no_gin_head
+    time: 1h30m
+    study_version: v3_nogin
+    args: ["--no-gin-head"]
+
+  # ④ 술 스타일어 절제 — 가드 반영 사전 기여도
+  - name: no_alcohol_lexicon
+    time: 1h30m
+    study_version: v3_nolex
+    args: ["--no-alcohol-lexicon"]
+
+  # ⑤ 술 브랜드 가제티어 절제
+  - name: no_alcohol_brands
+    time: 1h30m
+    study_version: v3_nobrand
+    args: ["--no-alcohol-brands"]
+
+  # ⑥ 형태소 분석기 비교 — Mecab(기본) vs Okt
+  - name: okt
+    time: 1h30m
+    study_version: v3_okt
+    args: ["--morpheme", "okt"]
+
+  # ⑦ BM25 벡터라이저 비교
+  - name: bm25
+    time: 1h30m
+    study_version: v3_bm25
+    args: ["--vectorizer", "bm25"]

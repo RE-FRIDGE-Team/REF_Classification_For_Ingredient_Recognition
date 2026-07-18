@@ -15,7 +15,10 @@ class REFParsedProductName:
     """원본 제품명"""
 
     refined_text: Optional[str] = None
-    """정제된 제품명 (브랜드·용량·수량·노이즈 제거 후)"""
+    """다음 프로세스로 보낼 최종 텍스트 (keep 옵션에 따라 브랜드/용량 재부착 결과)"""
+
+    core_text: Optional[str] = None
+    """순수 정제 제품명 (브랜드·용량·수량·노이즈 전부 제거한 코어)"""
 
     brand_name: Optional[str] = None
     """추출된 브랜드명"""
@@ -34,6 +37,7 @@ class REFParsedProductName:
             f"REFParsedProductName("
             f"original='{self.original_text}', "
             f"refined='{self.refined_text}', "
+            f"core='{self.core_text}', "
             f"brand='{self.brand_name}', "
             f"quantity={self.quantity}, "
             f"volume='{self.volume}')"

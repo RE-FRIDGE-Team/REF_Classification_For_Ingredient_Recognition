@@ -1,35 +1,72 @@
 """
-RE:FRIDGE Phase 1 — 실험 CLI 진입점 (2026-07 개편).
+RE:FRIDGE Phase 1 — 실험 CLI 진입점 (2026-07 2차 개편).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[개편 요약]
+[2차 개편 요약]
+  - --keep-brand 의미 재정의: 브랜드 '원위치 방치'가 아닌 '재조립' 방식.
+    쪼개기(브랜드/용량/수량 추출)는 항상 수행하되, refined_text 를
+    [브랜드] + 정제명 + [정규화 용량] 으로 재부착 (수량·노이즈만 탈락).
+      예) "농심 양파링 오리지널, 80g, 3개 3,960원 …" → "농심 양파링 오리지널 80g"
+  - 위치 피처(gin-head) 신설: PGIN 어휘 기반 복합어 우핵 분해로
+    "마지막 GIN = 핵심 GIN" 위치 개념을 필드 가중(BM25F 방식)으로 구현.
+      예) 김치치즈돈가스 → head=돈가스(강가중) / mods=김치·치즈(약가중)
+    PGIN 어휘는 Mecab 사용자사전용 수집분을 공용으로 재사용 (사람 개입 0).
+  - 술 사전 정비: 저집중 스타일어(년산·로제·진·숙성·스파클링) 삭제,
+    단어별 blocker/boundary 가드 도입(칵테일새우·진저에일·크럼블 차단),
+    술 브랜드 가제티어 블록 신설(봄베이사파이어형 무단서 브랜드 대응).
+    가제티어 확장은 tools/mine_alcohol_brands.py 로 집중도 마이닝.
+  - 결과 리포팅 개편: 출력 폴더/파일명에 모드태그_타임스탬프 부착으로
+    덮어쓰기 원천 차단 (예: results/keep_brand_2026-07-18-14-27/
+    comparison_report_keep_brand_2026-07-18-14-27.html).
+    HTML 리포트에 전 fold OOF 오류분석(중분류 포함)·Other Statistics
+    (오분류 순위·계층 오류 3분면·태그 정합성·F1 외 보조지표) 섹션 신설.
+
+[1차 개편 유지 사항]
   - MODEL_REGISTRY: fasttext 삭제, tfidf → text(TextPipelineClassifier) 교체.
     koelectra 는 술 OOV 구제 후순위 옵션으로 유지.
   - 모든 전처리/피처 정책이 CLI 토글로 노출됨 (2순위 원칙).
     CLI 미지정 시 experiment.yaml 값 → 그것도 없으면 코드 기본값.
-  - Mecab 사용자사전: 입력 CSV의 PGIN 컬럼 어휘를 자동 수집해 주입 (사람 개입 0).
   - HeadRuleEngine(모호 헤드어 룰)을 LabelEncoder 로 생성해 모델에 주입.
   - dedup: 전처리 후 · fold 생성 전 근접중복 원본 제거.
 
 [사용 예 — A/B 실험 축]
-  # ① 버그픽스+dedup 재베이스라인 (판정은 항상 StratifiedGroupKFold)
-  python src/run_experiment.py --input data.csv --models text --n-trials 50
+  # ① 재베이스라인 (판정은 항상 StratifiedGroupKFold)
+  python src/run_experiment.py --input data.csv --models text --n-trials 50 --study-version v3
 
-  # ② 형태소 분석기 비교 (Mecab vs Okt)
-  python src/run_experiment.py --input data.csv --models text --morpheme okt --study-version v2_okt
+  # ② ★keep-brand 재조립 — 브랜드+용량 보존 축
+  python src/run_experiment.py --input data.csv --models text --keep-brand --study-version v3_kb
 
-  # ③ 피처 절제(ablation) — word n-gram 끄기
-  python src/run_experiment.py --input data.csv --models text --no-word-ngram --study-version v2_noword
+  # ③ ★gin-head 절제 — 위치 피처 기여도 측정 (끄면 구버전 head-noun 폴백)
+  python src/run_experiment.py --input data.csv --models text --no-gin-head --study-version v3_nogin
 
-  # ④ 전처리 변형 — 브랜드 유지 / 플레이스홀더
-  python src/run_experiment.py --input data.csv --models text --keep-brand --study-version v2_kb
-  python src/run_experiment.py --input data.csv --models text --placeholder --study-version v2_ph
+  # ④ ★술 피처 절제 — 스타일어/브랜드 가제티어 개별 기여도
+  python src/run_experiment.py --input data.csv --models text --no-alcohol-lexicon --study-version v3_nolex
+  python src/run_experiment.py --input data.csv --models text --no-alcohol-brands --study-version v3_nobrand
 
-  # ⑤ BM25 벡터라이저
-  python src/run_experiment.py --input data.csv --models text --vectorizer bm25 --study-version v2_bm25
+  # ⑤ 술 브랜드 가제티어 갱신 (학습 전 1회, resources/alcohol_brands.txt 생성)
+  python tools/mine_alcohol_brands.py --input data.csv --out resources/alcohol_brands.txt
+
+  # ⑥ 형태소/벡터라이저 비교 (1차 개편 축 유지)
+  python src/run_experiment.py --input data.csv --models text --morpheme okt --study-version v3_okt
+  python src/run_experiment.py --input data.csv --models text --vectorizer bm25 --study-version v3_bm25
 
   # (후순위) 술 OOV 구제용 KoELECTRA 추가
   python src/run_experiment.py --input data.csv --models text,koelectra --parallel
+
+  [타임 스케줄러 사용 예]
+ # ① 기본 계획서대로 밤새 실행 — 이거 치고 자면 됨
+ #    (재베이스라인 2h → keep-brand 2h → gin-head 절제 2h → 스타일어 절제 2h → 브랜드 가제티어 절제 2h)
+ python tools/mine_alcohol_brands.py --input data.csv --out resources/alcohol_brands.txt (가제티어 생성)
+ python src/run_batch.py --input data.csv
+
+ # ② 자기 전 점검용 dry-run — 실행 없이 명령과 실험별 예상 종료 시각만 출력
+ python src/run_batch.py --input data.csv --dry-run
+
+ # ③ 예약/유예 시간 조정, 다른 계획서 사용
+ python src/run_batch.py --input data.csv --plan configs/my_plan.yaml --reserve 15m --grace 20m
+
+ # ④ 스케줄러 없이 단독 실험에 시간 제한만 걸 때
+ python src/run_experiment.py --input data.csv --models text --n-trials 10000 --timeout 2h
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -63,8 +100,10 @@ from src.models import KoElectraMultiTaskClassifier, TextPipelineClassifier
 from src.rules import HeadRuleEngine
 from src.tuning.optuna_runner import OptunaRunner
 from src.evaluate import (
+    build_oof_table,
     cv_evaluate,
     error_examples,
+    hierarchical_error_stats,
     per_class_f1_report,
     save_confusion_matrices,
 )
@@ -131,6 +170,7 @@ def run_single_model(
     study_version: str,
     reset_storage: bool,
     cv_strategy: str,
+    run_dir: str,
 ) -> dict:
     import pickle
     from src.tuning.optuna_runner import OptunaRunner
@@ -183,8 +223,8 @@ def run_single_model(
         folds=folds,
     )
 
-    # CV 전략별 결과 디렉토리 분리 (덮어쓰기 방지)
-    out = Path(output_dir) / cv_strategy / model_name
+    # ★실행 단위 결과 디렉토리 — 모드_타임스탬프 폴더로 이전 결과와 절대 미충돌
+    out = Path(output_dir) / run_dir / model_name
     out.mkdir(parents=True, exist_ok=True)
 
     save_confusion_matrices(
@@ -243,6 +283,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--n-trials", type=int, default=None,
                         help="모델당 Optuna trial 수 (설정 파일 값 override)")
+    parser.add_argument("--timeout", type=str, default=None,
+                        help="모델당 HPO 시간 예산 (예: 2h, 90m, 1h30m). "
+                             "지정 시 n-trials 와 먼저 도달하는 쪽에서 탐색 종료. "
+                             "시간으로만 제한하려면 --n-trials 를 크게(예: 10000) 설정.")
     parser.add_argument("--parallel", action="store_true",
                         help="ProcessPoolExecutor 로 모델 동시 실행")
     parser.add_argument("--log-level", default="INFO",
@@ -261,7 +305,8 @@ def parse_args() -> argparse.Namespace:
     # ── ★전처리 토글 (미지정=None → yaml 값 사용) ──
     g_pre = parser.add_argument_group("전처리 토글 (A/B 실험 축)")
     g_pre.add_argument("--keep-brand", action="store_true", default=None,
-                       help="브랜드를 제거하지 않고 원문 유지 (기본: 제거)")
+                       help="★재정의: 쪼개기는 그대로 수행하되 refined_text 를 "
+                            "'브랜드+정제명+용량'으로 재조립 (예: 농심 양파링 오리지널 80g)")
     g_pre.add_argument("--keep-volume", action="store_true", default=None,
                        help="용량(300g 등)을 제거하지 않음 (기본: 제거)")
     g_pre.add_argument("--keep-quantity", action="store_true", default=None,
@@ -281,9 +326,15 @@ def parse_args() -> argparse.Namespace:
     g_feat.add_argument("--head-noun", dest="use_head_noun",
                         action=argparse.BooleanOptionalAction, default=None,
                         help="head-noun 가중 필드 블록")
+    g_feat.add_argument("--gin-head", dest="use_gin_head",
+                        action=argparse.BooleanOptionalAction, default=None,
+                        help="GIN 어휘 우핵 분해 위치 필드 (--no-gin-head 로 구버전 head 폴백)")
     g_feat.add_argument("--alcohol-lexicon", dest="use_alcohol_lexicon",
                         action=argparse.BooleanOptionalAction, default=None,
-                        help="술 스타일어 카운트 피처 블록")
+                        help="술 스타일어 카운트 피처 블록 (가드 반영 매처)")
+    g_feat.add_argument("--alcohol-brands", dest="use_alcohol_brands",
+                        action=argparse.BooleanOptionalAction, default=None,
+                        help="술 브랜드 가제티어 카운트 블록 (봄베이사파이어형 대응)")
     g_feat.add_argument("--rules", dest="use_rules",
                         action=argparse.BooleanOptionalAction, default=None,
                         help="모호 헤드어 룰 오버라이드 (건면+짜장→라면 등)")
@@ -297,6 +348,67 @@ def parse_args() -> argparse.Namespace:
                         help="실행 전 해당 study 의 기존 Optuna 결과를 삭제.")
 
     return parser.parse_args()
+
+
+# 결과물 타임스탬프 시간대 — 실행 환경(Docker/WSL)이 UTC 여도 한국 시간 고정
+_TZ_NAME = "Asia/Seoul"
+
+def now_kst():
+    """KST 현재 시각 (tzdata 부재 등 실패 시 로컬 시각 폴백)."""
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(_TZ_NAME))
+    except Exception:
+        return datetime.now()
+
+
+def parse_duration(text: str) -> int:
+    """
+    시간 예산 문자열 → 초 변환. 허용 형식: "2h", "90m", "30s", "1h30m", "7200"(초).
+    """
+    import re as _re
+    s = str(text).strip().lower()
+    if s.isdigit():
+        return int(s)
+    total, matched = 0, False
+    for val, unit in _re.findall(r"(\d+(?:\.\d+)?)\s*([hms])", s):
+        total += float(val) * {"h": 3600, "m": 60, "s": 1}[unit]
+        matched = True
+    if not matched:
+        raise ValueError(f"시간 형식 해석 불가: {text!r} (예: 2h, 90m, 1h30m, 7200)")
+    return int(total)
+
+
+def _build_run_tag(pre_opt, use_word, use_head, use_gin_head,
+                   use_alcohol, use_alc_brand, vectorizer) -> str:
+    """
+    실행 모드 식별 태그 생성 — 결과 파일/폴더명에 부착되는 A/B 축 요약.
+
+    기본값과 다른 토글만 나열하는 방식 (전부 기본이면 "default").
+      예) --keep-brand 단독 실행 → "keep_brand"
+          --keep-brand --no-gin-head → "keep_brand_no_gin"
+    """
+    parts: list[str] = []
+    if pre_opt.keep_brand_volume:
+        parts.append("keep_brand")
+    if pre_opt.placeholder:
+        parts.append("placeholder")
+    if pre_opt.morpheme_analyzer != "mecab":
+        parts.append(pre_opt.morpheme_analyzer)
+    if not use_word:
+        parts.append("no_word")
+    if not use_head:
+        parts.append("no_head")
+    elif not use_gin_head:
+        parts.append("no_gin")
+    if not use_alcohol:
+        parts.append("no_lex")
+    if not use_alc_brand:
+        parts.append("no_brandgaz")
+    if vectorizer != "tfidf":
+        parts.append(vectorizer)
+    return "_".join(parts) or "default"
 
 
 def _resolve(cli_val, yaml_val, default):
@@ -365,8 +477,9 @@ def main() -> None:
 
     # ── 전처리 옵션 해석 (CLI > yaml > 기본값) ──
     pre_opt = PreprocessOptions(
-        # --keep-* 플래그는 '제거 안 함'을 의미 → remove_* 반전
-        remove_brand=not _resolve(args.keep_brand, not pre_cfg.get("remove_brand", True), False),
+        # ★--keep-brand = 재조립 모드 ('브랜드+정제명+용량' 재부착, 수량·노이즈만 탈락)
+        keep_brand_volume=_resolve(args.keep_brand, pre_cfg.get("keep_brand_volume"), False),
+        # --keep-volume/--keep-quantity 는 구버전 '원위치 유지' 미세 토글로 존치
         remove_volume=not _resolve(args.keep_volume, not pre_cfg.get("remove_volume", True), False),
         remove_quantity=not _resolve(args.keep_quantity, not pre_cfg.get("remove_quantity", True), False),
         placeholder=_resolve(args.placeholder, pre_cfg.get("placeholder"), False),
@@ -376,11 +489,13 @@ def main() -> None:
     do_dedup = _resolve(args.dedup, pre_cfg.get("dedup"), True)
 
     # ── 피처 토글 해석 ──
-    use_word    = _resolve(args.use_word, feat_cfg.get("use_word"), True)
-    use_head    = _resolve(args.use_head_noun, feat_cfg.get("use_head_noun"), True)
-    use_alcohol = _resolve(args.use_alcohol_lexicon, feat_cfg.get("use_alcohol_lexicon"), True)
-    use_rules   = _resolve(args.use_rules, feat_cfg.get("use_rules"), True)
-    vectorizer  = _resolve(args.vectorizer, feat_cfg.get("vectorizer"), "tfidf")
+    use_word     = _resolve(args.use_word, feat_cfg.get("use_word"), True)
+    use_head     = _resolve(args.use_head_noun, feat_cfg.get("use_head_noun"), True)
+    use_gin_head = _resolve(args.use_gin_head, feat_cfg.get("use_gin_head"), True)
+    use_alcohol  = _resolve(args.use_alcohol_lexicon, feat_cfg.get("use_alcohol_lexicon"), True)
+    use_alc_brand = _resolve(args.use_alcohol_brands, feat_cfg.get("use_alcohol_brands"), True)
+    use_rules    = _resolve(args.use_rules, feat_cfg.get("use_rules"), True)
+    vectorizer   = _resolve(args.vectorizer, feat_cfg.get("vectorizer"), "tfidf")
 
     logger.info(
         "실험 설정 — cv=%s | 전처리=%s dedup=%s | 피처: word=%s head=%s alcohol=%s rules=%s vec=%s",
@@ -397,9 +512,10 @@ def main() -> None:
     )
 
     # Mecab 사용자사전용 도메인 어휘(PGIN) 자동 수집 — 사람 개입 0
+    # PGIN 어휘: Mecab 사용자사전 + GIN 핵어 분해 양쪽의 공용 도메인 어휘원
     domain_words = (
         _collect_domain_words(args.input, cfg["data"].get("pgin_column"))
-        if pre_opt.morpheme_analyzer == "mecab" else []
+        if (pre_opt.morpheme_analyzer == "mecab" or use_gin_head) else []
     )
 
     prep = REFPreprocessor(
@@ -429,6 +545,14 @@ def main() -> None:
     n_classes = prep.n_classes
     summary   = data_summary(df)
     summary["cv_strategy"] = cv_strategy
+
+    # ── ★실행 식별자 — 모드 태그 + 결과 산출 시각 (덮어쓰기 원천 차단) ──
+    run_ts   = now_kst().strftime("%Y-%m-%d-%H-%M")   # 폴더/파일명 타임스탬프 KST 고정
+    mode_tag = _build_run_tag(pre_opt, use_word, use_head, use_gin_head,
+                              use_alcohol, use_alc_brand, vectorizer)
+    run_suffix = f"{mode_tag}_{run_ts}"
+    run_dir    = run_suffix                     # 폴더명 = 파일 접미와 동일 체계
+    logger.info("실행 식별자: %s (cv=%s)", run_suffix, cv_strategy)
 
     # ── ★룰 엔진 생성 (LabelEncoder 필요 → 전처리 후) ──
     rule_engine = HeadRuleEngine(
@@ -465,6 +589,12 @@ def main() -> None:
     optuna_cfg   = cfg.get("optuna", {})
     n_trials_map = optuna_cfg.get("n_trials", {})
 
+    # ── ★--timeout: HPO 시간 예산 override (배치 스케줄러의 시간 제어 지점) ──
+    if args.timeout:
+        budget = parse_duration(args.timeout)
+        optuna_cfg = {**optuna_cfg, "timeout_per_model": budget}
+        logger.info("HPO 시간 예산: %d초 (%.1f시간)", budget, budget / 3600)
+
     # sqlite storage 디렉토리 자동 생성 — "unable to open database file" 방지
     storage_uri = optuna_cfg.get("storage") or ""
     if storage_uri.startswith("sqlite:///"):
@@ -475,9 +605,12 @@ def main() -> None:
         "text": {
             "use_word": use_word,
             "use_head_noun": use_head,
+            "use_gin_head": use_gin_head,
             "use_alcohol_lexicon": use_alcohol,
+            "use_alcohol_brands": use_alc_brand,
             "vectorizer": vectorizer,
             "rule_engine": rule_engine,
+            "gin_vocab": domain_words if use_gin_head else None,
         },
         "koelectra": {
             "n_large":  n_classes["large"],
@@ -513,7 +646,7 @@ def main() -> None:
                     run_single_model,
                     key, mname, mcls, sspace, nt,
                     df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
-                    args.study_version, args.reset_storage, cv_strategy,
+                    args.study_version, args.reset_storage, cv_strategy, run_dir,
                 )
                 futures[future] = key
 
@@ -533,7 +666,7 @@ def main() -> None:
             r = run_single_model(
                 key, mname, mcls, sspace, nt,
                 df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
-                args.study_version, args.reset_storage, cv_strategy,
+                args.study_version, args.reset_storage, cv_strategy, run_dir,
             )
             all_results[r["model_name"]]       = r["cv_result"]
             all_study_results[r["model_name"]] = r["study_result"]
@@ -542,28 +675,38 @@ def main() -> None:
     total_time = time.perf_counter() - t_start
     logger.info("전체 실험 완료: %.1f초", total_time)
 
-    # ── 비교 출력 (전략별 하위 디렉토리) ──
+    # ── 비교 출력 — ★모드_타임스탬프 폴더 + 파일명 접미로 덮어쓰기 원천 차단 ──
     gate    = cfg.get("gate", {}).get("large_f1_min", 0.90)
-    out_dir = Path(args.output) / cv_strategy
+    out_dir = Path(args.output) / run_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     print_comparison_table(all_results, gate_large_f1=gate)
 
-    chart_path = str(out_dir / "comparison_chart.png")
+    chart_path = str(out_dir / f"comparison_chart_{run_suffix}.png")
     save_comparison_chart(
         all_results, chart_path, gate_large_f1=gate,
         dpi=cfg.get("output", {}).get("chart_dpi", 150),
     )
-    save_comparison_csv(all_results, str(out_dir / "comparison_table.csv"))
+    save_comparison_csv(all_results, str(out_dir / f"comparison_table_{run_suffix}.csv"))
 
+    # ── ★전 fold OOF 기반 오류 분석·계층 통계 (중분류 포함) ──
     le = prep.label_encoders
-    per_class: dict = {}
-    err_ex:    dict = {}
+    per_class:   dict = {}
+    err_ex:      dict = {}
+    other_stats: dict = {}
     for mname, details in all_fold_details.items():
-        per_class[mname] = per_class_f1_report(details, le["large"], task="large")
-        err_ex[mname]    = error_examples(details, df, le["large"], n=5000)
+        per_class[mname]   = per_class_f1_report(details, le["large"], task="large")
+        err_ex[mname]      = error_examples(details, df, le, n=5000)
+        oof                = build_oof_table(details, df, le)
+        other_stats[mname] = hierarchical_error_stats(oof)
+        # 오류 전량 CSV — HTML 표기 제한(300행) 초과분 열람용
+        err_ex[mname].to_csv(
+            out_dir / f"error_analysis_{mname}_{run_suffix}.csv",
+            index=False, encoding="utf-8-sig",
+        )
 
     if cfg.get("output", {}).get("html_report", True):
-        html_path = str(out_dir / "comparison_report.html")
+        html_path = str(out_dir / f"comparison_report_{run_suffix}.html")
         save_html_report(
             results=all_results,
             study_results=all_study_results,
@@ -573,6 +716,8 @@ def main() -> None:
             output_path=html_path,
             chart_path=chart_path,
             gate_large_f1=gate,
+            other_stats=other_stats,
+            run_label=f"{run_suffix} (cv={cv_strategy})",
         )
         logger.info("리포트: %s", html_path)
 

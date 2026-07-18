@@ -195,19 +195,29 @@ def save_html_report(
     output_path: str,
     chart_path: str,
     gate_large_f1: float = 0.85,
+    other_stats: dict[str, dict] | None = None,
+    run_label: str = "",
 ) -> None:
     """
-    HTML 리포트를 생성한다 (Jupyter 불필요 — 직접 렌더링).
+    HTML 리포트 생성 (Jupyter 불필요 — 직접 렌더링).
+
+    ★개편(2026-07 2차):
+      - Error Analysis: 전 fold OOF + true/pred_medium + error_type 컬럼 포함.
+      - Other Statistics 섹션 신설 (hierarchical_error_stats 산출물 렌더링):
+        오분류 카테고리 순위(대/중), 계층 오류 3분면 케이스 목록,
+        중분류-태그 정합성 검증, F1 외 보조 지표(Acc/BalancedAcc/MCC/Kappa 등).
 
     Args:
         results:        {"model_name": CVResult}
         study_results:  {"model_name": StudyResult}
         data_summary:   data_utils.data_summary() 반환값
-        error_examples: {"model_name": DataFrame}
+        error_examples: {"model_name": DataFrame} — evaluate.error_examples (OOF판)
         per_class_dfs:  {"model_name": DataFrame} — per_class_f1_report 반환값
         output_path:    저장 경로
         chart_path:     bar chart 이미지 경로
         gate_large_f1:  합격 기준
+        other_stats:    {"model_name": hierarchical_error_stats() 반환 dict}
+        run_label:      실행 식별 라벨 (모드_타임스탬프) — 제목·프로토콜 표기용
     """
     import base64
 
@@ -268,13 +278,81 @@ def save_html_report(
             <h4>{display_names.get(name, name)}</h4>
             {table_html}"""
 
-    # ── 오분류 예시 ──
+    # ── 오분류 예시 (OOF·중분류 포함) — 화면 표기는 상위 300행 제한 ──
+    _MAX_ROWS = 300
+
+    def _df_html(df: pd.DataFrame, max_rows: int = _MAX_ROWS) -> str:
+        note = (f'<p class="note">(전체 {len(df)}행 중 상위 {max_rows}행 표시 — '
+                f'전량은 동봉 error_analysis CSV 참조)</p>') if len(df) > max_rows else ""
+        return df.head(max_rows).to_html(index=False, classes="data-table", border=0) + note
+
     error_sections = ""
     for name, err_df in error_examples.items():
         if not err_df.empty:
+            type_counts = err_df["error_type"].value_counts().to_dict() \
+                if "error_type" in err_df.columns else {}
+            counts_line = " · ".join(f"{k}: <b>{v}</b>건" for k, v in type_counts.items())
             error_sections += f"""
-            <h4>{display_names.get(name, name)}</h4>
-            {err_df.to_html(index=False, classes='data-table', border=0)}"""
+            <h4>{display_names.get(name, name)} — 총 오류 {len(err_df)}건</h4>
+            <p>{counts_line}</p>
+            {_df_html(err_df)}"""
+
+    # ── Other Statistics 섹션 ──
+    def _metrics_table(metrics: dict[str, dict]) -> str:
+        rows = ""
+        for task, m in metrics.items():
+            rows += (f"<tr><td><b>{task}</b></td>"
+                     + "".join(f"<td>{m[k]:.4f}</td>"
+                               for k in ["accuracy", "balanced_accuracy", "macro_f1",
+                                          "weighted_f1", "mcc", "cohen_kappa"])
+                     + "</tr>")
+        return f"""
+        <table class="data-table">
+          <thead><tr><th>Task</th><th>Accuracy</th><th>Balanced Acc</th>
+          <th>macro F1</th><th>weighted F1</th><th>MCC</th><th>Cohen κ</th></tr></thead>
+          <tbody>{rows}</tbody>
+        </table>"""
+
+    def _case_details(title: str, df: pd.DataFrame, important: bool = False) -> str:
+        mark = " ⭐최중요" if important else ""
+        body = _df_html(df) if not df.empty else "<p>해당 케이스 없음</p>"
+        return f"""
+        <details {'open' if important else ''}>
+          <summary><b>{title}{mark}</b> — {len(df)}건</summary>
+          {body}
+        </details>"""
+
+    stats_sections = ""
+    for name, st in (other_stats or {}).items():
+        tag_df = st["tag_inconsistent"]
+        tag_html = (
+            "<p>✅ 중분류가 정답인 모든 샘플에서 태그가 올바르게 태깅됨 — "
+            "태그 오류는 전부 중분류 오류에서만 유래하므로 별도 카운트 불요.</p>"
+            if tag_df.empty else
+            f"<p>⚠️ 중분류는 정답인데 태그가 불일치한 케이스 <b>{len(tag_df)}</b>건 발견 "
+            "(중분류→태그 매핑 테이블 점검 필요):</p>" + _df_html(tag_df)
+        )
+        stats_sections += f"""
+        <h3>{display_names.get(name, name)}</h3>
+
+        <h4>7-1. 가장 많이 오분류한 카테고리 순위</h4>
+        <p><b>대분류 기준</b> (오분류 개수 · 최다 혼동 대상):</p>
+        {_df_html(st["rank_large"])}
+        <p><b>중분류 기준:</b></p>
+        {_df_html(st["rank_medium"])}
+
+        <h4>7-2. 계층 오류 케이스 분해</h4>
+        {_case_details("대분류 정답 · 중분류 오답", st["case_large_ok_medium_wrong"], important=True)}
+        {_case_details("대분류 오답 → 중분류도 오답", st["case_both_wrong"])}
+        {_case_details("대분류 오답 · 중분류 정답 (희귀 케이스)", st["case_large_wrong_medium_ok"])}
+
+        <h4>7-3. 중분류 → 카테고리 태그 정합성 검증</h4>
+        {tag_html}
+
+        <h4>7-4. F1 외 보조 분류 지표 (전 fold OOF 기준)</h4>
+        {_metrics_table(st["metrics"])}
+        <p>계층 동시 정답률 — 대·중 모두 정답: <b>{st["hier_exact_large_medium"]:.4f}</b>
+           / 대·중·태그 모두 정답: <b>{st["hier_exact_all"]:.4f}</b></p>"""
 
     # ── 데이터 요약 ──
     data_html = f"""
@@ -310,11 +388,13 @@ def save_html_report(
   summary {{ cursor: pointer; padding: 6px 0; }}
   .chart {{ max-width: 800px; margin: 20px 0; }}
   .summary-box {{ background: #e8eaf6; border-left: 4px solid #3f51b5; padding: 12px 20px; border-radius: 4px; margin: 16px 0; }}
+  .note {{ color: #607d8b; font-size: 0.85em; }}
 </style>
 </head>
 <body>
 
 <h1>RE:FRIDGE Phase 1 — Model Comparison Report</h1>
+{f'<p class="note">Run: <b>{run_label}</b></p>' if run_label else ''}
 
 <h2>1. Executive Summary</h2>
 <div class="summary-box">
@@ -344,8 +424,11 @@ def save_html_report(
 <h2>5. Data Info</h2>
 {data_html}
 
-<h2>6. Error Analysis (Fold 0, 대분류 오분류 상위 20개)</h2>
+<h2>6. Error Analysis (전 fold OOF — 대분류·중분류 오류 전량)</h2>
 {error_sections if error_sections else '<p>오류 분석 데이터 없음</p>'}
+
+<h2>7. Other Statistics</h2>
+{stats_sections if stats_sections else '<p>통계 데이터 없음</p>'}
 
 </body>
 </html>

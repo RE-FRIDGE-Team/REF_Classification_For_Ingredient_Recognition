@@ -80,8 +80,11 @@ class TextPipelineClassifier(BaseClassifier):
         use_char: bool = True,
         use_word: bool = True,
         use_head_noun: bool = True,
+        use_gin_head: bool = True,
         use_alcohol_lexicon: bool = True,
+        use_alcohol_brands: bool = True,
         vectorizer: str = "tfidf",
+        gin_vocab: list[str] | None = None,
         # ── 룰 레이어 ──
         rule_engine: HeadRuleEngine | None = None,
         # ── 기본 하이퍼파라미터 (Optuna 가 fit 시 오버라이드) ──
@@ -96,9 +99,12 @@ class TextPipelineClassifier(BaseClassifier):
             use_char=use_char,
             use_word=use_word,
             use_head_noun=use_head_noun,
+            use_gin_head=use_gin_head,
             use_alcohol_lexicon=use_alcohol_lexicon,
+            use_alcohol_brands=use_alcohol_brands,
             vectorizer=vectorizer,
         )
+        self._gin_vocab = gin_vocab       # GIN 핵어 분해 어휘 (PGIN 컬럼 유래)
         # 분류기 공통 설정
         self._clf_cfg: dict = dict(
             model_type_large=model_type_large,
@@ -179,7 +185,7 @@ class TextPipelineClassifier(BaseClassifier):
             self._update_params(params)
 
         # 1. 피처 행렬 생성 (char+word+head+lexicon)
-        self._features = FeatureBuilder(self._feature_cfg)
+        self._features = FeatureBuilder(self._feature_cfg, gin_vocab=self._gin_vocab)
         X = self._features.fit_transform(X_refined, X_nouns)
         logger.debug("피처 차원: %s", X.shape)
 
