@@ -94,6 +94,14 @@ class TextPipelineClassifier(BaseClassifier):
         class_weight: str | None = "balanced",
         seed: int = 42,
     ) -> None:
+        """
+        [2026-07 3차 개편 — 2단계 HPO·빔 결합 디코딩 지원]
+          - 중분류 헤드 전용 파라미터(C_medium 등)를 분리해 stage-2 HPO 가
+            대분류 헤드를 건드리지 않고 중분류만 탐색 가능하도록 함.
+          - decode="beam": 대분류 확신이 낮을 때 top-k 후보 브랜치를 전개해
+            결합 점수 log P(대) + λ·log P(중|대) 최대 경로로 (대,중)을 동시 결정.
+            → 중분류 증거가 대분류 선택을 뒤집을 수 있는 구조 (오류 전파 완화).
+        """
         # 피처 설정 — 토글은 생성자에서, 세부 수치는 fit(**params)에서 갱신
         self._feature_cfg = FeatureConfig(
             use_char=use_char,
@@ -105,15 +113,24 @@ class TextPipelineClassifier(BaseClassifier):
             vectorizer=vectorizer,
         )
         self._gin_vocab = gin_vocab       # GIN 핵어 분해 어휘 (PGIN 컬럼 유래)
-        # 분류기 공통 설정
+        # 분류기 공통 설정 + 중분류 전용 오버라이드 + 디코딩 정책
         self._clf_cfg: dict = dict(
             model_type_large=model_type_large,
             model_type_medium=model_type_medium,
             C=C,
             class_weight=class_weight,
             seed=seed,
+            # ── 중분류 헤드 전용 (미지정 시 공유값 사용 — 완전 하위호환) ──
+            C_medium=None,                     # None → C 공유
+            class_weight_medium="__shared__",  # 센티널 → class_weight 공유
+            # ── LCPN 디코딩 정책 ──
+            decode="greedy",                   # "greedy"(기존) | "beam"(결합 점수)
+            beam_size=3,                       # 전개할 대분류 후보 수 (top-k)
+            beam_margin=0.25,                  # p1-p2 < margin 인 모호 표본만 전개
+            joint_lambda=1.0,                  # 결합 점수의 중분류 로그확률 가중 λ
         )
-        # LightGBM 전용 설정 (기존 기본값 유지)
+        # LightGBM 전용 설정 (기존 기본값 유지) — 중분류 전용은 지연 생성
+        self._lgbm_params_medium: dict | None = None   # None → 공유 파라미터 사용
         self._lgbm_params: dict = dict(
             n_estimators=300, num_leaves=63, max_depth=-1, learning_rate=0.05,
             min_child_samples=20, colsample_bytree=0.8, subsample=0.8,
@@ -135,16 +152,28 @@ class TextPipelineClassifier(BaseClassifier):
     # 분류기 팩토리
     # ──────────────────────────────────────────────────────────────
 
-    def _make_clf(self, model_type: str):
-        """model_type 문자열로 sklearn/LGBM 분류기 인스턴스를 생성한다."""
+    def _make_clf(self, model_type: str, head: str = "large"):
+        """
+        model_type 문자열로 분류기 인스턴스 생성.
+        head="medium" 이면 중분류 전용 오버라이드(C_medium 등)를 우선 적용 —
+        stage-2 HPO 가 대분류 헤드에 영향 없이 중분류만 탐색하기 위한 분리 지점.
+        """
         cw   = self._clf_cfg["class_weight"]
         C    = self._clf_cfg["C"]
         seed = self._clf_cfg["seed"]
+        lgbm_p = self._lgbm_params
+        if head == "medium":
+            if self._clf_cfg["C_medium"] is not None:
+                C = self._clf_cfg["C_medium"]
+            if self._clf_cfg["class_weight_medium"] != "__shared__":
+                cw = self._clf_cfg["class_weight_medium"]
+            if self._lgbm_params_medium is not None:
+                lgbm_p = {**self._lgbm_params_medium, "class_weight": cw}
 
         if model_type == "lgbm":
             if not _LGB_AVAILABLE:
                 raise ImportError("lightgbm 패키지가 필요합니다.")
-            return lgb.LGBMClassifier(**self._lgbm_params)
+            return lgb.LGBMClassifier(**lgbm_p)
 
         if model_type == "linearsvc":
             # dual="auto": n_samples > n_features 여부에 따라 자동 선택 (sklearn 1.3+)
@@ -162,7 +191,7 @@ class TextPipelineClassifier(BaseClassifier):
             # soft-voting은 fit/predict 를 직접 구현한 경량 래퍼 사용
             return _SoftVotingPair(
                 LogisticRegression(C=C, class_weight=cw, max_iter=2000, random_state=seed),
-                lgb.LGBMClassifier(**self._lgbm_params) if _LGB_AVAILABLE else None,
+                lgb.LGBMClassifier(**lgbm_p) if _LGB_AVAILABLE else None,
             )
 
         raise ValueError(f"지원하지 않는 model_type: {model_type} (선택지: {MODEL_TYPES})")
@@ -178,8 +207,13 @@ class TextPipelineClassifier(BaseClassifier):
         y_large: np.ndarray,
         y_medium: np.ndarray,
         y_tag: np.ndarray,
+        fit_large_only: bool = False,
         **params,
     ) -> None:
+        """
+        fit_large_only=True: 피처+대분류 헤드만 학습 (stage-1 HPO 고속화용).
+        중분류/태그가 필요한 predict 사용 전에는 refit_medium() 호출 필요.
+        """
         # Optuna trial 파라미터 주입 (feature / clf / lgbm 각 그룹으로 라우팅)
         if params:
             self._update_params(params)
@@ -193,6 +227,9 @@ class TextPipelineClassifier(BaseClassifier):
         self._clf_large = self._make_clf(self._clf_cfg["model_type_large"])
         self._clf_large.fit(X, y_large)
 
+        if fit_large_only:
+            return                                    # 중분류·태그 학습 생략 (stage-1 전용)
+
         # 3. LCPN — 대분류별 중분류 헤드 학습
         label_df = pd.DataFrame({"large": y_large, "medium": y_medium, "tag": y_tag})
         self._clf_medium_map.clear()
@@ -205,11 +242,54 @@ class TextPipelineClassifier(BaseClassifier):
                 self._medium_single_map[int(large_val)] = int(uniq[0])
                 continue
             X_sub = X[group.index.to_numpy()]            # 해당 대분류 행만 추출
-            clf = self._make_clf(self._clf_cfg["model_type_medium"])
+            clf = self._make_clf(self._clf_cfg["model_type_medium"], head="medium")
             clf.fit(X_sub, group["medium"].values)
             self._clf_medium_map[int(large_val)] = clf
 
         # 4. 중분류 → 최빈 태그 매핑 테이블 (태그는 중분류에 종속적)
+        self._tag_map = (
+            label_df.groupby("medium")["tag"]
+            .agg(lambda x: int(x.value_counts().index[0]))
+            .to_dict()
+        )
+
+    def refit_medium(
+        self,
+        X_refined: pd.Series,
+        X_nouns: pd.Series,
+        y_large: np.ndarray,
+        y_medium: np.ndarray,
+        y_tag: np.ndarray,
+        **medium_params,
+    ) -> None:
+        """
+        피처·대분류 헤드는 고정한 채 중분류 헤드·태그 맵만 재학습하는 경로.
+
+        stage-2 HPO 의 핵심 고속화 지점: trial 마다 전체 재학습 대신
+        (고정된 피처 변환 → 브랜치별 소형 재학습)만 수행 — 체감 수 배 단축.
+        medium_params 로는 model_type_medium / C_medium / class_weight_medium /
+        *_medium LGBM 파라미터 / decode·beam_* 디코딩 정책만 전달할 것.
+        """
+        if self._features is None or self._clf_large is None:
+            raise RuntimeError("refit_medium 전에 fit(fit_large_only=True)이 필요합니다.")
+        if medium_params:
+            self._update_params(medium_params)
+
+        X = self._features.transform(X_refined, X_nouns)
+        label_df = pd.DataFrame({"large": y_large, "medium": y_medium, "tag": y_tag})
+        self._clf_medium_map.clear()
+        self._medium_single_map.clear()
+
+        for large_val, group in label_df.groupby("large"):
+            uniq = group["medium"].unique()
+            if len(uniq) == 1:
+                self._medium_single_map[int(large_val)] = int(uniq[0])
+                continue
+            X_sub = X[group.index.to_numpy()]
+            clf = self._make_clf(self._clf_cfg["model_type_medium"], head="medium")
+            clf.fit(X_sub, group["medium"].values)
+            self._clf_medium_map[int(large_val)] = clf
+
         self._tag_map = (
             label_df.groupby("medium")["tag"]
             .agg(lambda x: int(x.value_counts().index[0]))
@@ -225,17 +305,11 @@ class TextPipelineClassifier(BaseClassifier):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
 
-            # 1. 대분류 예측
-            large_pred = np.asarray(self._clf_large.predict(X), dtype=np.int64)
-
-            # 2. 대분류 라우팅 → 해당 중분류 헤드만 호출
-            medium_pred = np.full(len(large_pred), -1, dtype=np.int64)
-            for large_val, med_val in self._medium_single_map.items():
-                medium_pred[large_pred == large_val] = med_val     # 단일 중분류 상수 매핑
-            for large_val, clf in self._clf_medium_map.items():
-                mask = large_pred == large_val
-                if mask.any():
-                    medium_pred[mask] = clf.predict(X[mask])
+            # 1·2. 디코딩 — greedy(기존 top-1 라우팅) 또는 beam(결합 점수)
+            if self._clf_cfg.get("decode") == "beam" and self._clf_medium_map:
+                large_pred, medium_pred = self._decode_beam(X)
+            else:
+                large_pred, medium_pred = self._decode_greedy(X)
 
             # 3. ★룰 레이어 — 모호 헤드어 반례 오버라이드 (활성 시)
             if self._rules is not None:
@@ -296,6 +370,84 @@ class TextPipelineClassifier(BaseClassifier):
     # Private
     # ──────────────────────────────────────────────────────────────
 
+    def _decode_greedy(self, X) -> Tuple[np.ndarray, np.ndarray]:
+        """기존 top-1 라우팅: 대분류 argmax → 해당 브랜치 중분류 argmax."""
+        large_pred = np.asarray(self._clf_large.predict(X), dtype=np.int64)
+        medium_pred = np.full(len(large_pred), -1, dtype=np.int64)
+        for large_val, med_val in self._medium_single_map.items():
+            medium_pred[large_pred == large_val] = med_val         # 단일 중분류 상수 매핑
+        for large_val, clf in self._clf_medium_map.items():
+            mask = large_pred == large_val
+            if mask.any():
+                medium_pred[mask] = clf.predict(X[mask])
+        return large_pred, medium_pred
+
+    def _decode_beam(self, X) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        빔 결합 디코딩 — LCPN 오류 전파 완화의 핵심 경로 (2026-07 3차).
+
+        [원리]
+          top-down 지역 분류기의 대표적 단점 = 상위(대분류) 오류의 하위 전파.
+          완화책으로 대분류 확신이 낮은 표본에 한해 top-k 대분류 후보 브랜치를
+          모두 전개하고, 경로 결합 점수
+              score(l, m) = log P(l) + λ · log P(m | l)
+          가 최대인 (대분류, 중분류) 쌍을 동시에 선택한다 — HTC 의 beam search
+          디코딩과 동일 원리. λ가 클수록 중분류 증거가 대분류 선택을 주도
+          ("중분류가 거꾸로 대분류를 고르는" 방향)하며, λ·k·margin 은 stage-2
+          HPO 탐색 대상.
+
+        [안전장치]
+          - p1 - p2 ≥ beam_margin 인 고확신 표본은 greedy 경로 유지 (비용·안정성)
+          - LinearSVC 의 확률은 decision_function 의 softmax 근사(비보정)이므로
+            λ 튜닝이 사실상 보정 온도 역할을 겸함
+        """
+        eps = 1e-9
+        k       = int(self._clf_cfg.get("beam_size", 3))
+        margin  = float(self._clf_cfg.get("beam_margin", 0.25))
+        lam     = float(self._clf_cfg.get("joint_lambda", 1.0))
+
+        proba   = _proba_of(self._clf_large, X)                   # (n, L)
+        classes = np.asarray(self._clf_large.classes_, dtype=np.int64)
+        order   = np.argsort(-proba, axis=1)                      # 확률 내림차순 인덱스
+        p_sort  = np.take_along_axis(proba, order, axis=1)
+        n       = X.shape[0]
+        k       = min(k, proba.shape[1])
+
+        # 기본값: greedy 결과로 초기화 (고확신 표본은 그대로 확정)
+        large_pred, medium_pred = self._decode_greedy(X)
+        if proba.shape[1] < 2:
+            return large_pred, medium_pred
+        expand = (p_sort[:, 0] - p_sort[:, 1]) < margin           # 모호 표본만 전개
+        if not expand.any():
+            return large_pred, medium_pred
+
+        rows = np.where(expand)[0]
+        best_score = np.full(n, -np.inf)
+        for j in range(k):                                        # 후보 순위 j 브랜치 전개
+            cand_large = classes[order[rows, j]]
+            log_pl = np.log(p_sort[rows, j] + eps)
+            for lv in np.unique(cand_large):
+                sub = rows[cand_large == lv]                      # 이 브랜치를 j순위로 가진 행들
+                lv = int(lv)
+                if lv in self._medium_single_map:
+                    m_best = np.full(len(sub), self._medium_single_map[lv], dtype=np.int64)
+                    log_pm = np.zeros(len(sub))                   # P(m|l)=1
+                elif lv in self._clf_medium_map:
+                    clf = self._clf_medium_map[lv]
+                    pm = _proba_of(clf, X[sub])
+                    mi = pm.argmax(axis=1)
+                    m_best = np.asarray(clf.classes_, dtype=np.int64)[mi]
+                    log_pm = np.log(pm[np.arange(len(sub)), mi] + eps)
+                else:
+                    continue                                      # 학습에 없던 브랜치 방어
+                score = log_pl[cand_large == lv] + lam * log_pm
+                better = score > best_score[sub]
+                upd = sub[better]
+                best_score[upd] = score[better]
+                large_pred[upd] = lv
+                medium_pred[upd] = m_best[better]
+        return large_pred, medium_pred
+
     def _transform(self, X_refined: pd.Series, X_nouns: pd.Series):
         if self._features is None:
             raise RuntimeError("fit()을 먼저 호출하세요.")
@@ -319,6 +471,11 @@ class TextPipelineClassifier(BaseClassifier):
                 self._clf_cfg[k] = v
             elif k in lgbm_keys:
                 self._lgbm_params[k] = v
+            elif k.endswith("_medium") and k[: -len("_medium")] in lgbm_keys:
+                # 중분류 전용 LGBM 파라미터 (n_estimators_medium 등) — 지연 생성 후 갱신
+                if self._lgbm_params_medium is None:
+                    self._lgbm_params_medium = dict(self._lgbm_params)
+                self._lgbm_params_medium[k[: -len("_medium")]] = v
             else:
                 logger.warning("알 수 없는 파라미터 무시: %s=%r", k, v)
 

@@ -54,9 +54,8 @@ RE:FRIDGE Phase 1 — 실험 CLI 진입점 (2026-07 2차 개편).
   python src/run_experiment.py --input data.csv --models text,koelectra --parallel
 
   [타임 스케줄러 사용 예]
- # ① 기본 계획서대로 밤새 실행 — 이거 치고 자면 됨
+ # ① 기본 계획서대로 밤새 실행 — 이거 하나 치고 자면 됨
  #    (재베이스라인 2h → keep-brand 2h → gin-head 절제 2h → 스타일어 절제 2h → 브랜드 가제티어 절제 2h)
- python tools/mine_alcohol_brands.py --input data.csv --out resources/alcohol_brands.txt (가제티어 생성)
  python src/run_batch.py --input data.csv
 
  # ② 자기 전 점검용 dry-run — 실행 없이 명령과 실험별 예상 종료 시각만 출력
@@ -67,6 +66,8 @@ RE:FRIDGE Phase 1 — 실험 CLI 진입점 (2026-07 2차 개편).
 
  # ④ 스케줄러 없이 단독 실험에 시간 제한만 걸 때
  python src/run_experiment.py --input data.csv --models text --n-trials 10000 --timeout 2h
+
+ python src/run_experiment.py --input product_data_collection/refined_grocery_csv_for_classification/recognition_dataset_augmented.csv --models text --hpo-mode two_stage --n-trials 10000 --timeout 3h --study-version v4_2s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -171,6 +172,8 @@ def run_single_model(
     reset_storage: bool,
     cv_strategy: str,
     run_dir: str,
+    hpo_mode: str = "joint",
+    stage1_frac: float = 0.6,
 ) -> dict:
     import pickle
     from src.tuning.optuna_runner import OptunaRunner
@@ -191,28 +194,56 @@ def run_single_model(
 
     storage    = optuna_cfg.get("storage")
     study_name = _build_study_name(model_name, study_version, cv_strategy)
+    timeout_total = optuna_cfg.get("timeout_per_model", 3600)
 
-    if reset_storage and storage:
-        _delete_study_if_exists(study_name, storage, logger)
-
-    logger.info("[%s] HPO 시작: %d trials (study=%s)", model_key, n_trials, study_name)
-    runner = OptunaRunner(
-        model_name=model_name,
-        model_cls=model_cls,
-        search_space=search_space,
-        folds=folds,
-        df=df,
-        n_trials=n_trials,
+    common = dict(
+        model_name=model_name, model_cls=model_cls, search_space=search_space,
+        folds=folds, df=df, n_trials=n_trials,
         sampler=optuna_cfg.get("sampler", "TPE"),
         pruner=optuna_cfg.get("pruner", "MedianPruner"),
         n_startup_trials=optuna_cfg.get("n_startup_trials", 10),
         n_warmup_steps=optuna_cfg.get("n_warmup_steps", 2),
-        timeout=optuna_cfg.get("timeout_per_model", 3600),
-        storage=storage,
-        extra_kwargs=extra_kwargs,
-        study_name=study_name,
+        storage=storage, extra_kwargs=extra_kwargs,
     )
-    study_result = runner.run()
+
+    if hpo_mode == "two_stage":
+        # ── ★2단계 HPO: 1단계(피처+대분류, 대분류 F1) → 동결 → 2단계(중분류+디코딩, 중분류 F1) ──
+        import pandas as _pd
+        from src.tuning.optuna_runner import StudyResult
+
+        t1 = timeout_total * stage1_frac
+        t2 = max(timeout_total - t1, 300)
+        if reset_storage and storage:
+            _delete_study_if_exists(f"{study_name}_L", storage, logger)
+            _delete_study_if_exists(f"{study_name}_M", storage, logger)
+
+        logger.info("[%s] 2단계 HPO — stage1(large) %ds / stage2(medium) %ds", model_key, t1, t2)
+        s1 = OptunaRunner(**common, timeout=t1, level="large",
+                          study_name=f"{study_name}_L").run()
+        logger.info("[%s] stage1 확정 large_F1=%.4f → 동결 후 stage2 진입", model_key, s1.best_score)
+        s2 = OptunaRunner(**common, timeout=t2, level="medium",
+                          frozen_params=s1.best_params,
+                          study_name=f"{study_name}_M").run()
+        logger.info("[%s] stage2 확정 medium_F1=%.4f (decode=%s)", model_key,
+                    s2.best_score, s2.best_params.get("decode"))
+
+        trials_all = _pd.concat(
+            [d.assign(stage=s) for d, s in
+             [(s1.all_trials_df, "1_large"), (s2.all_trials_df, "2_medium")] if d is not None],
+            ignore_index=True,
+        )
+        study_result = StudyResult(
+            model_name=model_name,
+            best_score=s1.best_score,                      # 게이트 판정 기준 = 대분류 F1 유지
+            best_params={**s1.best_params, **s2.best_params},
+            all_trials_df=trials_all,
+        )
+    else:
+        if reset_storage and storage:
+            _delete_study_if_exists(study_name, storage, logger)
+        logger.info("[%s] HPO 시작: %d trials (study=%s)", model_key, n_trials, study_name)
+        study_result = OptunaRunner(**common, timeout=timeout_total,
+                                    study_name=study_name).run()
 
     logger.info("[%s] 최적 파라미터로 CV 평가 시작", model_key)
     cv_result, fold_details = cv_evaluate(
@@ -283,6 +314,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--n-trials", type=int, default=None,
                         help="모델당 Optuna trial 수 (설정 파일 값 override)")
+    parser.add_argument("--hpo-mode", choices=["joint", "two_stage"], default=None,
+                        help="joint(기존: 대분류 F1 단일 목적) | two_stage(★1단계 대분류 → "
+                             "동결 → 2단계 중분류+빔디코딩, 레벨별 목적함수 분리)")
+    parser.add_argument("--stage1-frac", type=float, default=None,
+                        help="two_stage 시 1단계(대분류)에 배정할 시간 비율 (기본 0.6)")
     parser.add_argument("--timeout", type=str, default=None,
                         help="모델당 HPO 시간 예산 (예: 2h, 90m, 1h30m). "
                              "지정 시 n-trials 와 먼저 도달하는 쪽에서 탐색 종료. "
@@ -547,9 +583,14 @@ def main() -> None:
     summary["cv_strategy"] = cv_strategy
 
     # ── ★실행 식별자 — 모드 태그 + 결과 산출 시각 (덮어쓰기 원천 차단) ──
+    hpo_mode    = _resolve(args.hpo_mode, cfg.get("optuna", {}).get("hpo_mode"), "joint")
+    stage1_frac = _resolve(args.stage1_frac, cfg.get("optuna", {}).get("stage1_frac"), 0.6)
+
     run_ts   = now_kst().strftime("%Y-%m-%d-%H-%M")   # 폴더/파일명 타임스탬프 KST 고정
     mode_tag = _build_run_tag(pre_opt, use_word, use_head, use_gin_head,
                               use_alcohol, use_alc_brand, vectorizer)
+    if hpo_mode == "two_stage":
+        mode_tag = f"{mode_tag}_2stage"               # 결과 폴더에서 HPO 방식 즉시 식별
     run_suffix = f"{mode_tag}_{run_ts}"
     run_dir    = run_suffix                     # 폴더명 = 파일 접미와 동일 체계
     logger.info("실행 식별자: %s (cv=%s)", run_suffix, cv_strategy)
@@ -647,6 +688,7 @@ def main() -> None:
                     key, mname, mcls, sspace, nt,
                     df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
                     args.study_version, args.reset_storage, cv_strategy, run_dir,
+                    hpo_mode, stage1_frac,
                 )
                 futures[future] = key
 
@@ -667,6 +709,7 @@ def main() -> None:
                 key, mname, mcls, sspace, nt,
                 df_path, folds_path, le_path, ekwargs, optuna_cfg, args.output,
                 args.study_version, args.reset_storage, cv_strategy, run_dir,
+                hpo_mode, stage1_frac,
             )
             all_results[r["model_name"]]       = r["cv_result"]
             all_study_results[r["model_name"]] = r["study_result"]
